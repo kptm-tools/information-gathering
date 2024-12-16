@@ -21,7 +21,7 @@ func RunWhoIsScan(targets []string) (*WhoIsEventResult, error) {
 	res := new(WhoIsEventResult)
 
 	for _, target := range targets {
-		targetDomain, err := GetDomainFromURL(target)
+		targetDomain, err := getDomainFromURL(target)
 		if err != nil {
 			log.Printf("Error parsing domain from URL for target `%s`: %+v, skipping to the next target.\n", target, err)
 			continue
@@ -74,7 +74,7 @@ func GetWhoIsRaw(url string) (string, error) {
 	return whois_raw, nil
 }
 
-func GetDomainFromURL(rawURL string) (string, error) {
+func getDomainFromURL(rawURL string) (string, error) {
 	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
 		rawURL = "http://" + rawURL
 	}
