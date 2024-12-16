@@ -3,12 +3,22 @@ package main
 import (
 	"fmt"
 
-	"github.com/kptm-tools/information-gathering/pkg/whois"
+	"github.com/kptm-tools/information-gathering/pkg/handlers"
+	"github.com/kptm-tools/information-gathering/pkg/services"
 )
 
 func main() {
 	fmt.Println("Hello information gathering!")
 
-	targets := []string{"whois.verisign-grs.com"}
-	whois.RunWhoIsScan(targets)
+	// Services
+	whoIsService := services.NewWhoIsService()
+
+	// Handlers
+	whoIsHandler := handlers.NewWhoIsHandler(whoIsService)
+
+	err := whoIsHandler.RunScan()
+	if err != nil {
+		panic(err)
+	}
+
 }

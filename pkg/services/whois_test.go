@@ -1,4 +1,4 @@
-package whois
+package services
 
 import "testing"
 
