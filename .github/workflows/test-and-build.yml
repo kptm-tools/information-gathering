@@ -1,0 +1,29 @@
+name: test-and-build
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+
+env:
+  IMAGE_NAME: information_gathering
+
+jobs:
+  test-and-build:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: 🛎️ Checkout Code
+        uses: actions/checkout@v3
+
+      - name: 🔧 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: 📦 Build docker image
+        run: docker build -t ${IMAGE_NAME}:latest .
+
+      - name: ✅ Run Tests in Docker Container
+        run: |
+          docker run ${IMAGE_NAME}:latest go test -v ./...
