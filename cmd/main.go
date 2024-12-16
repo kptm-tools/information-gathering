@@ -12,12 +12,17 @@ func main() {
 
 	// Services
 	whoIsService := services.NewWhoIsService()
+	dnsLookupService := services.NewDNSLookupService()
 
 	// Handlers
 	whoIsHandler := handlers.NewWhoIsHandler(whoIsService)
+	dnsLookupHandler := handlers.NewDNSLookupHandler(dnsLookupService)
 
-	err := whoIsHandler.RunScan()
-	if err != nil {
+	if err := whoIsHandler.RunScan(); err != nil {
+		panic(err)
+	}
+
+	if err := dnsLookupHandler.RunScan(); err != nil {
 		panic(err)
 	}
 
