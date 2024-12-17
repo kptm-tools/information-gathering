@@ -64,43 +64,62 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 }
 
 func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
+
+	var (
+		records       []dom.DNSRecord
+		DNSSECEnabled bool
+	)
 	start := time.Now()
 
 	// Retrieve A and AAAA records
-	aRecords, aaaaRecords, err := lookupAandAAAA(domain)
-	if err != nil {
-		slog.Error(err.Error())
+	aRecords, err := lookupAandAAAA(domain)
+	if err == nil {
+		records = append(records, aRecords...)
 	}
 
 	// Retrieve CNAME records
 	cnameRecords, err := lookupCNAME(domain)
+	if err == nil {
+		records = append(records, cnameRecords...)
+	}
 
 	// TXTRecords
 	txtRecords, err := lookupTXT(domain)
+	if err == nil {
+		records = append(records, txtRecords...)
+	}
 
 	// Lookup NSRecords
 	nsRecords, err := lookupNS(domain)
+	if err == nil {
+		records = append(records, nsRecords...)
+	}
 
 	// Retrieve MXRecords
-	mxRecords, err := lookupMX(domain)
+	mxRecords, _ := lookupMX(domain)
+	if err == nil {
+		records = append(records, mxRecords...)
+	}
 
 	// Retrieve SOARecord
-	soaRecord, err := lookupSOA(domain)
+	soaRecords, err := lookupSOA(domain)
+	if err == nil {
+		records = append(records, soaRecords...)
+	}
 
+	// Retrieve DNSSECRecord
+	DNSSECRecords, _ := lookupDNSSEC(domain)
 	// Check is DNSSEC is enabled
-	DNSSECEnabled, err := lookupDNSSEC(domain)
+	if len(DNSSECRecords) > 0 && err == nil {
+		records = append(records, DNSSECRecords...)
+		DNSSECEnabled = true
+	}
 
 	duration := time.Since(start)
 
 	return &dom.DNSLookupResult{
 		Domain:         domain,
-		ARecords:       aRecords,
-		AAAARecords:    aaaaRecords,
-		CNAMERecords:   cnameRecords,
-		MXRecords:      mxRecords,
-		TXTRecords:     txtRecords,
-		NSRecords:      nsRecords,
-		SOARecord:      soaRecord,
+		DNSRecords:     records,
 		DNSSECEnabled:  DNSSECEnabled,
 		LookupDuration: duration,
 		CreatedAt:      time.Now(),
@@ -108,91 +127,109 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
 
 }
 
-func lookupAandAAAA(domain string) ([]string, []string, error) {
-	var (
-		aRecords    []string
-		aaaaRecords []string
-	)
+func lookupAandAAAA(domain string) ([]dom.DNSRecord, error) {
+	var records []dom.DNSRecord
 
 	// Retrieve A and AAAA records
 	ips, err := net.LookupIP(domain)
-
 	if err != nil {
-		return aRecords, aaaaRecords, err
+		return records, err
 	}
 
 	for _, ip := range ips {
-		if ip.To4() != nil {
-			aRecords = append(aRecords, ip.String())
-		}
+		recordType := dom.ARecord
 		if ip.To4() == nil {
-			aaaaRecords = append(aaaaRecords, ip.String())
+			recordType = dom.AAAARecord
+			records = append(records, dom.DNSRecord{
+				Type:  recordType,
+				Name:  domain,
+				Value: ip.String(),
+			})
 		}
 	}
-
-	return aRecords, aaaaRecords, err
+	return records, err
 }
 
-func lookupCNAME(domain string) ([]string, error) {
-	var cnameRecords []string
+func lookupCNAME(domain string) ([]dom.DNSRecord, error) {
+	var records []dom.DNSRecord
 
 	cname, err := net.LookupCNAME(domain)
 	if err != nil {
-		return cnameRecords, fmt.Errorf("failed to get CNAME record: `%v`", err)
+		return records, fmt.Errorf("failed to get CNAME record: `%v`", err)
 	}
-	cnameRecords = append(cnameRecords, cname)
-	return cnameRecords, nil
+	records = append(records, dom.DNSRecord{
+		Type:  dom.CNAMERecord,
+		Name:  domain,
+		Value: cname,
+	})
+	return records, nil
 }
 
-func lookupTXT(domain string) ([]string, error) {
-	var txtRecords []string
+func lookupTXT(domain string) ([]dom.DNSRecord, error) {
+	var records []dom.DNSRecord
 
-	records, err := net.LookupTXT(domain)
+	txtRecords, err := net.LookupTXT(domain)
 	if err != nil {
-		return txtRecords, fmt.Errorf("failed to get TXT records: `%v`", err)
+		return records, fmt.Errorf("failed to get TXT records: `%v`", err)
 	}
-	for _, record := range records {
-		txtRecords = append(txtRecords, record)
+	for _, txt := range txtRecords {
+		records = append(records, dom.DNSRecord{
+			Type:  dom.TXTRecord,
+			Name:  domain,
+			Value: txt,
+		})
 	}
-	return txtRecords, nil
-
+	return records, nil
 }
 
-func lookupNS(domain string) ([]string, error) {
-	var nsRecords []string
+func lookupNS(domain string) ([]dom.DNSRecord, error) {
+	var records []dom.DNSRecord
 
-	records, err := net.LookupNS(domain)
+	nsRecords, err := net.LookupNS(domain)
 	if err != nil {
-		return nsRecords, fmt.Errorf("failed to get NS records: `%v`\n", err)
+		return records, fmt.Errorf("failed to get NS records: `%v`\n", err)
 	}
-	for _, ns := range records {
-		nsRecords = append(nsRecords, ns.Host)
+	for _, ns := range nsRecords {
+		records = append(records, dom.DNSRecord{
+			Type:  dom.NSRecord,
+			Name:  domain,
+			Value: ns.Host,
+		})
 	}
-	return nsRecords, nil
+	return records, nil
 }
 
-func lookupMX(domain string) ([]dom.MailExchange, error) {
-	var mxRecords []dom.MailExchange
+func lookupMX(domain string) ([]dom.DNSRecord, error) {
+	var records []dom.DNSRecord
 
-	records, err := net.LookupMX(domain)
+	mxRecords, err := net.LookupMX(domain)
 	if err != nil {
-		return mxRecords, fmt.Errorf("failed to get MX records: `%v`\n", err)
+		return nil, fmt.Errorf("failed to get MX records: `%v`\n", err)
 	}
-	for _, mx := range records {
-		r := dom.MailExchange{
-			Host:     mx.Host,
-			Priority: int(mx.Pref),
+	for _, mxRecord := range mxRecords {
+		mx := dom.MailExchange{
+			Host: mxRecord.Host,
 		}
-		mxRecords = append(mxRecords, r)
+
+		priorityInt := int(mxRecord.Pref)
+		record := dom.DNSRecord{
+			Type:  dom.MXRecord,
+			Name:  domain,
+			Value: mx,
+		}
+		record.Priority = &priorityInt
+
+		records = append(records, record)
 	}
 
-	return mxRecords, nil
+	return records, nil
 
 }
 
-func lookupSOA(domain string) (*dom.StartOfAuthority, error) {
+func lookupSOA(domain string) ([]dom.DNSRecord, error) {
 	soaRecord := new(dom.StartOfAuthority)
 	dnsServer := "8.8.8.8:53" // GooglePublic DNS server for query
+	var ttl int
 
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(domain), dns.TypeSOA)
@@ -213,13 +250,21 @@ func lookupSOA(domain string) (*dom.StartOfAuthority, error) {
 			soaRecord.Retry = int(soa.Retry)
 			soaRecord.Expire = int(soa.Expire)
 			soaRecord.MinimumTTL = int(soa.Minttl)
+			ttl = int(soa.Hdr.Ttl)
 		}
 	}
 
-	return soaRecord, nil
+	return []dom.DNSRecord{{
+		Type:  dom.SOARecord,
+		Name:  domain,
+		Value: soaRecord,
+		TTL:   ttl,
+	}}, nil
 }
 
-func lookupDNSSEC(domain string) (bool, error) {
+func lookupDNSSEC(domain string) ([]dom.DNSRecord, error) {
+	var records []dom.DNSRecord
+	dnsKey := new(dom.DNSKey)
 	dnsServer := "8.8.8.8:53" // GooglePublic DNS server for query
 
 	m := new(dns.Msg)
@@ -230,7 +275,7 @@ func lookupDNSSEC(domain string) (bool, error) {
 
 	response, _, err := client.Exchange(m, dnsServer)
 	if err != nil {
-		return false, fmt.Errorf("failed to query DNSSECRecords: `%v`", err)
+		return nil, fmt.Errorf("failed to query DNSSECRecords: `%v`", err)
 	}
 
 	// Check if DNSKEY records are present
@@ -240,9 +285,18 @@ func lookupDNSSEC(domain string) (bool, error) {
 		for _, answer := range response.Answer {
 			if dnskey, ok := answer.(*dns.DNSKEY); ok {
 				fmt.Printf("Flags: %d, Protocol: %d, Algorithm: %d\n", dnskey.Flags, dnskey.Protocol, dnskey.Algorithm)
+				dnsKey.Protocol = int(dnskey.Protocol)
+				dnsKey.Flags = int(dnskey.Flags)
+				dnsKey.Algorithm = int(dnskey.Algorithm)
 			}
+			records = append(records, dom.DNSRecord{
+				Type:  dom.DNSSECRecord,
+				Name:  domain,
+				Value: dnsKey,
+				TTL:   int(answer.Header().Ttl),
+			})
 		}
-		return true, nil
+		return records, nil
 	}
-	return false, nil
+	return nil, nil
 }
