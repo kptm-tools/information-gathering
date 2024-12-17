@@ -72,3 +72,12 @@ func (r *DNSLookupEventResult) String() string {
 	}
 	return fmt.Sprintf("DNSLookup Event Result\n%s", string(data))
 }
+
+func HasDNSKeyRecord(records []DNSRecord) bool {
+	for _, record := range records {
+		if record.Type == DNSKeyRecord {
+			return true
+		}
+	}
+	return false
+}

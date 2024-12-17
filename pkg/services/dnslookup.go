@@ -100,7 +100,7 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, []error) {
 	}
 
 	// Check if we got a DNSKeyRecord somewhere
-	if hasDNSKeyRecord(records) {
+	if dom.HasDNSKeyRecord(records) {
 		DNSSECEnabled = true
 	}
 
@@ -209,15 +209,6 @@ func QueryDNSRecord(domain string, recordType uint16) ([]dom.DNSRecord, error) {
 		}
 	}
 	return records, nil
-}
-
-func hasDNSKeyRecord(records []dom.DNSRecord) bool {
-	for _, record := range records {
-		if record.Type == dom.DNSKeyRecord {
-			return true
-		}
-	}
-	return false
 }
 
 func isValidDomain(domain string) bool {
