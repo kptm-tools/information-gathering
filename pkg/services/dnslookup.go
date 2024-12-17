@@ -11,6 +11,7 @@ import (
 
 	dom "github.com/kptm-tools/information-gathering/pkg/domain"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
+	"github.com/miekg/dns"
 )
 
 type DNSLookupService struct {
@@ -63,7 +64,6 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 }
 
 func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
-	// TODO: Handle errors
 	start := time.Now()
 
 	// Retrieve A and AAAA records
@@ -84,6 +84,12 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
 	// Retrieve MXRecords
 	mxRecords, err := lookupMX(domain)
 
+	// Retrieve SOARecord
+	soaRecord, err := lookupSOA(domain)
+
+	// Check is DNSSEC is enabled
+	DNSSECEnabled, err := lookupDNSSEC(domain)
+
 	duration := time.Since(start)
 
 	return &dom.DNSLookupResult{
@@ -94,6 +100,8 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
 		MXRecords:      mxRecords,
 		TXTRecords:     txtRecords,
 		NSRecords:      nsRecords,
+		SOARecord:      soaRecord,
+		DNSSECEnabled:  DNSSECEnabled,
 		LookupDuration: duration,
 		CreatedAt:      time.Now(),
 	}, nil
@@ -180,4 +188,61 @@ func lookupMX(domain string) ([]dom.MailExchange, error) {
 
 	return mxRecords, nil
 
+}
+
+func lookupSOA(domain string) (*dom.StartOfAuthority, error) {
+	soaRecord := new(dom.StartOfAuthority)
+	dnsServer := "8.8.8.8:53" // GooglePublic DNS server for query
+
+	m := new(dns.Msg)
+	m.SetQuestion(dns.Fqdn(domain), dns.TypeSOA)
+
+	// Use the DNS client to query the server
+	client := new(dns.Client)
+	response, _, err := client.Exchange(m, dnsServer)
+	if err != nil {
+		return nil, fmt.Errorf("Error querying DNSServer: `%v`", err)
+	}
+
+	for _, answer := range response.Answer {
+		if soa, ok := answer.(*dns.SOA); ok {
+			soaRecord.PrimaryNS = soa.Ns
+			soaRecord.AdminEmail = soa.Mbox
+			soaRecord.Serial = int(soa.Serial)
+			soaRecord.Refresh = int(soa.Refresh)
+			soaRecord.Retry = int(soa.Retry)
+			soaRecord.Expire = int(soa.Expire)
+			soaRecord.MinimumTTL = int(soa.Minttl)
+		}
+	}
+
+	return soaRecord, nil
+}
+
+func lookupDNSSEC(domain string) (bool, error) {
+	dnsServer := "8.8.8.8:53" // GooglePublic DNS server for query
+
+	m := new(dns.Msg)
+	m.SetQuestion(dns.Fqdn(domain), dns.TypeDNSKEY)
+
+	// Use the DNS client to query the server
+	client := new(dns.Client)
+
+	response, _, err := client.Exchange(m, dnsServer)
+	if err != nil {
+		return false, fmt.Errorf("failed to query DNSSECRecords: `%v`", err)
+	}
+
+	// Check if DNSKEY records are present
+	if len(response.Answer) > 0 {
+		// DNSSEC is enabled
+		fmt.Printf("DNSSEC is enabled. DNSKEY records for %s:\n", domain)
+		for _, answer := range response.Answer {
+			if dnskey, ok := answer.(*dns.DNSKEY); ok {
+				fmt.Printf("Flags: %d, Protocol: %d, Algorithm: %d\n", dnskey.Flags, dnskey.Protocol, dnskey.Algorithm)
+			}
+		}
+		return true, nil
+	}
+	return false, nil
 }
