@@ -4,7 +4,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 	"sync"
 	"time"
@@ -44,7 +43,7 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 			if err != nil {
 				s.Logger.Error("Error performing DNSLookup for target ", target, err)
 				mu.Lock()
-				errs = append(errs, err)
+				errs = append(errs, err...)
 				mu.Unlock()
 				return
 			}
@@ -57,17 +56,22 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 	wg.Wait()
 
 	if len(errs) > 0 {
-		return &res, fmt.Errorf("completed with errors: %v", errs)
+		var formattedErrors []string
+		for _, e := range errs {
+			formattedErrors = append(formattedErrors, e.Error())
+		}
+		return &res, fmt.Errorf("completed with errors:\n%s", errs)
 	}
 
 	return &res, nil
 }
 
-func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
+func performDNSLookup(domain string) (*dom.DNSLookupResult, []error) {
 
 	var (
 		records       []dom.DNSRecord
 		DNSSECEnabled bool
+		errs          []error
 	)
 	start := time.Now()
 	wantRecords := []uint16{
@@ -84,7 +88,8 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
 	for _, recordType := range wantRecords {
 		typeRecords, err := QueryDNSRecord(domain, recordType)
 		if err != nil {
-			log.Fatalf("Error: %v", err)
+			errs = append(errs, err)
+			continue
 		}
 		records = append(records, typeRecords...)
 	}
@@ -102,7 +107,7 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, error) {
 		DNSSECEnabled:  DNSSECEnabled,
 		LookupDuration: duration,
 		CreatedAt:      time.Now(),
-	}, nil
+	}, errs
 
 }
 
@@ -119,7 +124,7 @@ func QueryDNSRecord(domain string, recordType uint16) ([]dom.DNSRecord, error) {
 	c := new(dns.Client)
 	res, _, err := c.Exchange(m, r)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query DNS: %w", err)
+		return nil, fmt.Errorf("failed to query type `%v` records for domain %s: %w", recordType, domain, err)
 	}
 
 	// Parse the answers
