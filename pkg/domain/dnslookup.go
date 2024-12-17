@@ -1,4 +1,3 @@
-// TODO: Maybe create a Record abstract struct... how can we associate a name to a record?
 package domain
 
 import (

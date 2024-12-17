@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,7 +65,7 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 		for _, e := range errs {
 			formattedErrors = append(formattedErrors, e.Error())
 		}
-		return &res, fmt.Errorf("completed with errors:\n%s", errs)
+		return &res, fmt.Errorf("completed with errors:\n%s", strings.Join(formattedErrors, "\n"))
 	}
 
 	return &res, nil
