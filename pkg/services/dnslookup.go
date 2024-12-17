@@ -1,10 +1,9 @@
-// TODO: Add validation and additional record functions
-
 package services
 
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -36,6 +35,11 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 
 	wg.Add(len(targets))
 	for _, target := range targets {
+		if !isValidDomain(target) {
+			s.Logger.Error("Not a valid domain: %s", target, 123)
+			continue
+		}
+
 		go func(domain string) {
 			defer wg.Done()
 
@@ -213,4 +217,12 @@ func hasDNSKeyRecord(records []dom.DNSRecord) bool {
 		}
 	}
 	return false
+}
+
+func isValidDomain(domain string) bool {
+	// net.LookupHost validates the domain and resolves it
+	if _, err := net.LookupHost(domain); err != nil {
+		return false
+	}
+	return true
 }
