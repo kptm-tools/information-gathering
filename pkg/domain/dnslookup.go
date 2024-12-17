@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const GoogleResolver = "8.8.8.8:53" // Google DNS Server
+
 type DNSRecordType string
 
 const (
@@ -17,7 +19,7 @@ const (
 	NSRecord     DNSRecordType = "NS"
 	MXRecord     DNSRecordType = "MX"
 	SOARecord    DNSRecordType = "SOA"
-	DNSSECRecord DNSRecordType = "DNSSEC"
+	DNSKeyRecord DNSRecordType = "DNSKey"
 )
 
 type DNSLookupEventResult struct {
@@ -42,7 +44,8 @@ type DNSRecord struct {
 
 // MailExchange represents an MX (Mail Exchange) record.
 type MailExchange struct {
-	Host string `json:"host"` // The mail server host
+	Host     string `json:"host"`     // The mail server host
+	Priority int    `json:"priority"` // Preference for mail server
 }
 
 // StartOfAuthority represents an SOA (Start of Authority) record.
