@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kptm-tools/information-gathering/pkg/domain"
+	cmmn "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/likexian/whois"
 	whoisparser "github.com/likexian/whois-parser"
@@ -26,14 +26,14 @@ func NewWhoIsService() *WhoIsService {
 	}
 }
 
-func (s *WhoIsService) RunScan(targets []string) (*domain.WhoIsEventResult, error) {
+func (s *WhoIsService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
 	s.Logger.Info("Running WhoIs scanner...")
 
 	var (
-		res  domain.WhoIsEventResult
-		errs []error
-		mu   sync.Mutex
-		wg   sync.WaitGroup
+		tResults []cmmn.TargetResult
+		errs     []error
+		mu       sync.Mutex
+		wg       sync.WaitGroup
 	)
 
 	wg.Add(len(targets))
@@ -70,7 +70,11 @@ func (s *WhoIsService) RunScan(targets []string) (*domain.WhoIsEventResult, erro
 			}
 
 			mu.Lock()
-			res.Hosts = append(res.Hosts, parsedResult)
+			tRes := cmmn.TargetResult{
+				Target:  target,
+				Results: map[string]interface{}{"whois": parsedResult},
+			}
+			tResults = append(tResults, tRes)
 			mu.Unlock()
 		}(target)
 	}
@@ -78,10 +82,10 @@ func (s *WhoIsService) RunScan(targets []string) (*domain.WhoIsEventResult, erro
 	wg.Wait()
 
 	if len(errs) > 0 {
-		return &res, fmt.Errorf("completed with errors: %v", errs)
+		return &tResults, fmt.Errorf("completed with errors: %v", errs)
 	}
 
-	return &res, nil
+	return &tResults, nil
 }
 
 func getDomainFromURL(rawURL string) (string, error) {

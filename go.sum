@@ -1,3 +1,5 @@
+github.com/kptm-tools/common v1.0.1 h1:uCo/Mo28A9+m8p0vqXzZk4HL7u1w3gcg0tNP5+Jygss=
+github.com/kptm-tools/common v1.0.1/go.mod h1:kZFzyRNP75QRcT9Z1tlGAQcQLe50SvfBkGjxvjALKDk=
 github.com/likexian/gokit v0.25.15 h1:QjospM1eXhdMMHwZRpMKKAHY/Wig9wgcREmLtf9NslY=
 github.com/likexian/gokit v0.25.15/go.mod h1:S2QisdsxLEHWeD/XI0QMVeggp+jbxYqUxMvSBil7MRg=
 github.com/likexian/whois v1.15.5 h1:gpPxyCTJtLtJDmakHCo//0ZjK/ocI01GCAd/WBJ2oH8=

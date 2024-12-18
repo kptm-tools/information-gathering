@@ -1,9 +1,9 @@
 package interfaces
 
-import "github.com/kptm-tools/information-gathering/pkg/domain"
+import "github.com/kptm-tools/common/common/results"
 
 type IWhoIsService interface {
-	RunScan(targets []string) (*domain.WhoIsEventResult, error)
+	RunScan(targets []string) (*[]results.TargetResult, error)
 }
 
 type IWhoIsHandler interface {

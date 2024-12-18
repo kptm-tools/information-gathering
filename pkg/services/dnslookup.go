@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	dom "github.com/kptm-tools/information-gathering/pkg/domain"
+	cmmn "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/miekg/dns"
 )
@@ -25,13 +25,13 @@ func NewDNSLookupService() *DNSLookupService {
 	}
 }
 
-func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult, error) {
+func (s *DNSLookupService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
 
 	var (
-		res  dom.DNSLookupEventResult
-		errs []error
-		mu   sync.Mutex
-		wg   sync.WaitGroup
+		targetResults []cmmn.TargetResult
+		errs          []error
+		mu            sync.Mutex
+		wg            sync.WaitGroup
 	)
 
 	wg.Add(len(targets))
@@ -53,8 +53,13 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 				return
 			}
 
+			tResult := cmmn.TargetResult{
+				Target:  domain,
+				Results: map[string]interface{}{"dnslookup": result},
+			}
+
 			mu.Lock()
-			res.Hosts = append(res.Hosts, *result)
+			targetResults = append(targetResults, tResult)
 			mu.Unlock()
 		}(target)
 	}
@@ -65,16 +70,16 @@ func (s *DNSLookupService) RunScan(targets []string) (*dom.DNSLookupEventResult,
 		for _, e := range errs {
 			formattedErrors = append(formattedErrors, e.Error())
 		}
-		return &res, fmt.Errorf("completed with errors:\n%s", strings.Join(formattedErrors, "\n"))
+		return &targetResults, fmt.Errorf("completed with errors:\n%s", strings.Join(formattedErrors, "\n"))
 	}
 
-	return &res, nil
+	return &targetResults, nil
 }
 
-func performDNSLookup(domain string) (*dom.DNSLookupResult, []error) {
+func performDNSLookup(domain string) (*cmmn.DNSLookupResult, []error) {
 
 	var (
-		records       []dom.DNSRecord
+		records       []cmmn.DNSRecord
 		DNSSECEnabled bool
 		errs          []error
 	)
@@ -100,13 +105,13 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, []error) {
 	}
 
 	// Check if we got a DNSKeyRecord somewhere
-	if dom.HasDNSKeyRecord(records) {
+	if cmmn.HasDNSKeyRecord(records) {
 		DNSSECEnabled = true
 	}
 
 	duration := time.Since(start)
 
-	return &dom.DNSLookupResult{
+	return &cmmn.DNSLookupResult{
 		Domain:         domain,
 		DNSRecords:     records,
 		DNSSECEnabled:  DNSSECEnabled,
@@ -117,10 +122,10 @@ func performDNSLookup(domain string) (*dom.DNSLookupResult, []error) {
 }
 
 // QueryDNSRecord fetches available records of the specified type and returns TTL information
-func QueryDNSRecord(domain string, recordType uint16) ([]dom.DNSRecord, error) {
-	var records []dom.DNSRecord
+func QueryDNSRecord(domain string, recordType uint16) ([]cmmn.DNSRecord, error) {
+	var records []cmmn.DNSRecord
 
-	r := dom.GoogleResolver
+	r := cmmn.GoogleResolver
 	// Create DNS message
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(domain), recordType)
@@ -136,56 +141,56 @@ func QueryDNSRecord(domain string, recordType uint16) ([]dom.DNSRecord, error) {
 	for _, answer := range res.Answer {
 		switch record := answer.(type) {
 		case *dns.A:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name:  record.Header().Name,
-				Type:  dom.ARecord,
+				Type:  cmmn.ARecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.A.String(),
 			})
 		case *dns.AAAA:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name:  record.Header().Name,
-				Type:  dom.AAAARecord,
+				Type:  cmmn.AAAARecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.AAAA.String(),
 			})
 		case *dns.CNAME:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name:  record.Header().Name,
-				Type:  dom.CNAMERecord,
+				Type:  cmmn.CNAMERecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.Target,
 			})
 		case *dns.MX:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name: record.Hdr.Name,
-				Type: dom.MXRecord,
+				Type: cmmn.MXRecord,
 				TTL:  int(record.Hdr.Ttl),
-				Value: dom.MailExchange{
+				Value: cmmn.MailExchange{
 					Host:     record.Mx,
 					Priority: int(record.Preference),
 				},
 			})
 		case *dns.TXT:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name:  record.Hdr.Name,
-				Type:  dom.TXTRecord,
+				Type:  cmmn.TXTRecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.Txt,
 			})
 		case *dns.NS:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name:  record.Hdr.Name,
-				Type:  dom.NSRecord,
+				Type:  cmmn.NSRecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.Ns,
 			})
 		case *dns.SOA:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name: record.Hdr.Name,
-				Type: dom.SOARecord,
+				Type: cmmn.SOARecord,
 				TTL:  int(record.Hdr.Ttl),
-				Value: dom.StartOfAuthority{
+				Value: cmmn.StartOfAuthority{
 					PrimaryNS:  record.Ns,
 					AdminEmail: record.Mbox,
 					Serial:     int(record.Serial),
@@ -196,11 +201,11 @@ func QueryDNSRecord(domain string, recordType uint16) ([]dom.DNSRecord, error) {
 				},
 			})
 		case *dns.DNSKEY:
-			records = append(records, dom.DNSRecord{
+			records = append(records, cmmn.DNSRecord{
 				Name: record.Hdr.Name,
-				Type: dom.DNSKeyRecord,
+				Type: cmmn.DNSKeyRecord,
 				TTL:  int(record.Hdr.Ttl),
-				Value: dom.DNSKey{
+				Value: cmmn.DNSKey{
 					Flags:     int(record.Flags),
 					Protocol:  int(record.Protocol),
 					Algorithm: int(record.Algorithm),

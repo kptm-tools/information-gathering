@@ -1,9 +1,9 @@
 package interfaces
 
-import "github.com/kptm-tools/information-gathering/pkg/domain"
+import "github.com/kptm-tools/common/common/results"
 
 type IDNSLookupService interface {
-	RunScan(targets []string) (*domain.DNSLookupEventResult, error)
+	RunScan(targets []string) (*[]results.TargetResult, error)
 }
 
 type IDNSLookupHandler interface {

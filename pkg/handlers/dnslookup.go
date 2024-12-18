@@ -20,11 +20,13 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 
 func (h *DNSLookupHandler) RunScan() error {
 	targets := []string{"i2linked.com", "devteamdelta.org"}
-	res, err := h.dnsLookupService.RunScan(targets)
+	results, err := h.dnsLookupService.RunScan(targets)
 	if err != nil {
 		return err
 	}
-	fmt.Println(res.String())
+	for _, res := range *results {
+		fmt.Println(res.String())
+	}
 
 	return nil
 }
