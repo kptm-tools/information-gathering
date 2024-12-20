@@ -32,7 +32,7 @@ func getRandomUserAgent() string {
 // HTTP client with random User-Agent
 func fetchWithRandomUserAgent(url string) (*http.Response, error) {
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -53,6 +53,7 @@ func fetchWithRandomUserAgent(url string) (*http.Response, error) {
 }
 
 func main() {
+	startTime := time.Now()
 	fmt.Println("Hello Web Scraper!")
 
 	targetDomain := "aynitech.com"
@@ -88,6 +89,8 @@ func main() {
 	for _, email := range uniqueEmails {
 		fmt.Printf("\t%s\n", email)
 	}
+
+	fmt.Printf("Execution time: %s\n", time.Since(startTime))
 
 }
 
