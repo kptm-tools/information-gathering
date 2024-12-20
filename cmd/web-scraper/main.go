@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -52,9 +53,27 @@ func fetchWithRandomUserAgent(url string) (*http.Response, error) {
 	return resp, nil
 }
 
+// Concurrency stuff
+type Job struct {
+	Link   string
+	Domain string
+}
+
+type Result struct {
+	Emails []string
+	Error  error
+}
+
+func worker(jobs <-chan Job, results chan<- Result, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for job := range jobs {
+		emails, err := extractEmailsFromPage(job.Domain, job.Link)
+		results <- Result{Emails: emails, Error: err}
+	}
+}
+
 func main() {
 	startTime := time.Now()
-	fmt.Println("Hello Web Scraper!")
 
 	targetDomain := "aynitech.com"
 	fmt.Println("Scraping Google Links...")
@@ -64,28 +83,44 @@ func main() {
 	}
 	fmt.Printf("Found %d links...\n", len(links))
 
-	var emails []string
-	for _, link := range links {
-		foundEmails, err := extractEmailsFromPage(targetDomain, link)
-		if err != nil {
-			log.Printf("Error extracting emails from page %s: %v", link, err)
-			continue
-		}
+	// Create channels for jobs and results
+	numWorkers := 5
+	jobs := make(chan Job, len(links))
+	results := make(chan Result, len(links))
 
-		if len(foundEmails) == 0 {
-			fmt.Printf("No emails found in page: %s...\n", link[:20])
-		} else {
-			fmt.Printf("Extracted emails from %s...:\n", link[:20])
-			for _, email := range foundEmails {
-				fmt.Printf("\t%s\n", email)
-			}
-		}
-
-		emails = append(emails, foundEmails...)
+	// Start worker goroutines
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go worker(jobs, results, &wg)
 	}
 
+	// Send jobs to the jobs channel
+	go func() {
+		for _, link := range links {
+			jobs <- Job{Link: link, Domain: targetDomain}
+		}
+		close(jobs)
+	}()
+
+	// Wait for all workers to finish and close results channel
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	var allEmails []string
+	for result := range results {
+		if result.Error != nil {
+			log.Printf("Error processing link: %v", result.Error)
+			continue
+		}
+		allEmails = append(allEmails, result.Emails...)
+	}
+
+	uniqueEmails := removeDuplicateEmails(allEmails)
 	fmt.Println("The following emails have been extracted:")
-	uniqueEmails := removeDuplicateEmails(emails)
 	for _, email := range uniqueEmails {
 		fmt.Printf("\t%s\n", email)
 	}
