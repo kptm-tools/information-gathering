@@ -53,6 +53,31 @@ func fetchWithRandomUserAgent(url string) (*http.Response, error) {
 	return resp, nil
 }
 
+// HTTP client with Intel MacOS X userAgent
+func fetchWithDesktopUserAgent(url string) (*http.Response, error) {
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set the random User-Agent
+	rAgent := userAgents[1]
+	req.Header.Set("User-Agent", rAgent)
+	log.Printf("Set random User-Agent to: %s\n", rAgent[:20])
+
+	// Make the HTTP request
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Fetching with user agent failed: %s\n", rAgent)
+		return nil, fmt.Errorf("failed to fetch URL: %w", err)
+	}
+	return resp, nil
+}
+
 // Concurrency stuff
 type Job struct {
 	Link   string
@@ -76,10 +101,9 @@ func main() {
 	startTime := time.Now()
 
 	targetDomain := "aynitech.com"
-	fmt.Println("Scraping Google Links...")
-	links, err := scrapeGoogleLinks(targetDomain)
+	links, err := scrapeLinkedinLinks(targetDomain)
 	if err != nil {
-		log.Fatalf("Error scraping Google links: %v", err)
+		log.Fatalf("Error scraping links: %v", err)
 	}
 	fmt.Printf("Found %d links...\n", len(links))
 
@@ -124,6 +148,7 @@ func main() {
 	for _, email := range uniqueEmails {
 		fmt.Printf("\t%s\n", email)
 	}
+	fmt.Println("Total unique emails extracted:", len(uniqueEmails))
 
 	fmt.Printf("Execution time: %s\n", time.Since(startTime))
 
@@ -136,6 +161,7 @@ func scrapeGoogleLinks(query string) ([]string, error) {
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}
+	fmt.Println("Scraping Google Links...")
 	resp, err := client.Get(searchURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch search results: %w", err)
@@ -168,6 +194,48 @@ func scrapeGoogleLinks(query string) ([]string, error) {
 			if cleanLink != "" {
 				links = append(links, cleanLink)
 			}
+		}
+	})
+
+	return links, nil
+}
+
+func scrapeLinkedinLinks(query string) ([]string, error) {
+	searchURL := fmt.Sprintf("https://www.google.com/search?num=100&q=site:linkedin.com+%s", url.QueryEscape(query))
+
+	// client := &http.Client{Timeout: 5 * time.Second}
+
+	fmt.Println("Scraping LinkedIn links with Google...")
+	resp, err := fetchWithRandomUserAgent(searchURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch linkedin search results: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("non-OK HTTP status: %s", resp.Status)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse HTML: %w", err)
+	}
+
+	var links []string
+	// List items
+	doc.Find("a").Each(func(i int, s *goquery.Selection) {
+		// Check attributes
+		href, exists := s.Attr("href")
+		if exists {
+			// Clean the Yahoo redirection
+			parsedURL, err := url.Parse(href)
+			if err != nil {
+				log.Printf("failed to parse redirection URL %s: %s", href, err)
+				return
+			}
+
+			log.Println("Found linkedin link:", parsedURL.String())
+			links = append(links, parsedURL.String())
 		}
 	})
 
