@@ -34,6 +34,15 @@ func createHTTPClient(timeout time.Duration) *http.Client {
 
 // Create a reusable HTTP request with custom headers
 func createHTTPRequest(method, url string, headers map[string]string) (*http.Request, error) {
+
+	if method == "" || !isValidHTTPMethod(method) {
+		return nil, fmt.Errorf("invalid HTTP method")
+	}
+
+	if url == "" {
+		return nil, fmt.Errorf("url cannot empty")
+	}
+
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -46,6 +55,18 @@ func createHTTPRequest(method, url string, headers map[string]string) (*http.Req
 
 }
 
+// Helper function to validate HTTP methods
+func isValidHTTPMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete,
+		http.MethodPatch, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return true
+	default:
+		return false
+	}
+}
+
+// Perform a GET request with custom HTTP headers
 func fetchWithCustomHeaders(url string, headers map[string]string) (*http.Response, error) {
 	client := createHTTPClient(5 * time.Second)
 	req, err := createHTTPRequest("GET", url, headers)
@@ -74,6 +95,8 @@ func fetchWithRandomUserAgent(url string) (*http.Response, error) {
 }
 
 // Concurrency stuff
+
+// Job defines a job struct with attributes accessed by workers to extract emails
 type Job struct {
 	Link   string
 	Domain string

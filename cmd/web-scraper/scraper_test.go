@@ -53,3 +53,89 @@ func Test_extractEmailsFromHTML(t *testing.T) {
 
 	}
 }
+
+func Test_createHTTPRequest(t *testing.T) {
+	tests := []struct {
+		name            string
+		method          string
+		url             string
+		headers         map[string]string
+		expectedErr     bool
+		expectedMethod  string
+		expectedURL     string
+		expectedHeaders map[string]string
+	}{
+		{
+			name:            "Valid GET Request with Headers",
+			method:          "GET",
+			url:             "https://example.com",
+			headers:         map[string]string{"Authorization": "Bearer token123", "Content-Type": "application/json"},
+			expectedErr:     false,
+			expectedMethod:  "GET",
+			expectedURL:     "https://example.com",
+			expectedHeaders: map[string]string{"Authorization": "Bearer token123", "Content-Type": "application/json"},
+		},
+		{
+			name:            "Valid POST Request without Headers",
+			method:          "POST",
+			url:             "https://example.com/api",
+			headers:         map[string]string{},
+			expectedErr:     false,
+			expectedMethod:  "POST",
+			expectedURL:     "https://example.com/api",
+			expectedHeaders: map[string]string{},
+		},
+		{
+			name:            "Invalid Empty URL",
+			method:          "GET",
+			url:             "",
+			headers:         nil,
+			expectedErr:     true,
+			expectedMethod:  "GET",
+			expectedURL:     "",
+			expectedHeaders: map[string]string{},
+		},
+		{
+			name:            "Invalid HTTP Method",
+			method:          "INVALID",
+			url:             "",
+			headers:         nil,
+			expectedErr:     true,
+			expectedMethod:  "INVALID",
+			expectedURL:     "",
+			expectedHeaders: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := createHTTPRequest(tt.method, tt.url, tt.headers)
+
+			// Check error
+			if (err != nil) != tt.expectedErr {
+				t.Errorf("Expected error: %v, got %v", tt.expectedErr, err)
+			}
+
+			if err != nil {
+				return
+			}
+
+			if req.Method != tt.expectedMethod {
+				t.Errorf("Expected method: %s, got %s", req.Method, tt.expectedMethod)
+			}
+
+			for key, expectedValue := range tt.expectedHeaders {
+				if gotValue := req.Header.Get(key); gotValue != expectedValue {
+					t.Errorf("Expected header %s: %s, got: %s", key, expectedValue, gotValue)
+				}
+			}
+
+			// Check unexpected headers
+			for key := range req.Header {
+				if _, exists := tt.expectedHeaders[key]; !exists {
+					t.Errorf("Unexpected header set: %s", key)
+				}
+			}
+		})
+	}
+}
