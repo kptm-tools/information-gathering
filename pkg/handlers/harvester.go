@@ -20,13 +20,13 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 
 func (h *HarvesterHandler) RunScan() error {
 
-	targets := []string{"aynitech.com"}
+	targets := []string{"aynitech.com", "kriptome.com"}
 	results, err := h.harvesterService.RunScan(targets)
 	if err != nil {
 		return err
 	}
 
-	for _, res := range *results {
+	for _, res := range results {
 		fmt.Println(res.String())
 	}
 

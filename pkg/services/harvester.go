@@ -61,7 +61,7 @@ func NewHarvesterService() *HarvesterService {
 	}
 }
 
-func (s *HarvesterService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
+func (s *HarvesterService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
 	var (
 		tResults []cmmn.TargetResult
 		errs     []error
@@ -72,7 +72,7 @@ func (s *HarvesterService) RunScan(targets []string) (*[]cmmn.TargetResult, erro
 
 		emails, err := s.HarvestEmails(target)
 		if err != nil {
-			s.Logger.Error("Error harvesting emails ", target, err)
+			s.Logger.Error("Error harvesting emails", "target", target, "error", err)
 			errs = append(errs, err)
 			continue
 		}
@@ -85,30 +85,63 @@ func (s *HarvesterService) RunScan(targets []string) (*[]cmmn.TargetResult, erro
 		tResults = append(tResults, tRes)
 	}
 
-	// fmt.Printf("Got emails: %v", emails)
+	if len(errs) > 0 {
+		s.Logger.Warn("Some targets failed during the scan", "failed_targets", len(errs))
+	}
 
-	return &tResults, nil
+	return tResults, nil
 }
 
+// HarvestEmails extracts emails from a target
 func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 	startTime := time.Now()
+	s.Logger.Info("Harvesting emails", "target", target)
 
-	var links []string
-
-	linkedInLinks, err := scrapeLinkedinLinks(target)
+	links, err := s.scrapeLinks(target)
 	if err != nil {
-		return nil, fmt.Errorf("error scraping linkedin links: %v", err)
+		s.Logger.Error("Failed to scrape links", "target", target, "error", err)
+		return nil, err
 	}
 
-	time.Sleep(5 * time.Second)
+	allEmails := s.processLinks(links, target)
+	uniqueEmails := removeDuplicateEmails(allEmails)
+
+	s.Logger.Info("Completed email harvesting",
+		"target", target,
+		"email_count", len(uniqueEmails),
+		"unique_emails", uniqueEmails,
+		"duration", time.Since(startTime).String(),
+	)
+
+	return uniqueEmails, nil
+}
+
+func (s *HarvesterService) HarvestSubdomains(target string) ([]string, error) {
+	// TODO: Implementation pending
+	return nil, nil
+}
+
+func (s *HarvesterService) scrapeLinks(target string) ([]string, error) {
+	s.Logger.Debug("Scraping Google and LinkedIn links", "target", target)
+
 	googleLinks, err := scrapeGoogleLinks(target)
 	if err != nil {
-		return nil, fmt.Errorf("error scraping google links: %v", err)
+		s.Logger.Warn("Standard Google scraping failed", "target", target, "error", err)
 	}
 
-	links = append(links, linkedInLinks...)
-	links = append(links, googleLinks...)
-	fmt.Printf("Found %d total links...\n", len(links))
+	randomTimeout(2, 5)
+	linkedInLinks, err := scrapeLinkedinLinks(target)
+	if err != nil {
+		s.Logger.Warn("Google scraping for LinkedIn links failed", "target", target, "error", err)
+	}
+
+	links := append(googleLinks, linkedInLinks...)
+	s.Logger.Debug("Scraped links", "target", target, "link_count", len(links))
+
+	return links, nil
+}
+
+func (s *HarvesterService) processLinks(links []string, domain string) []string {
 
 	// Create channels for jobs and results
 	numWorkers := 5
@@ -125,7 +158,7 @@ func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 	// Send jobs to the jobs channel
 	go func() {
 		for _, link := range links {
-			jobs <- Job{Link: link, Domain: target}
+			jobs <- Job{Link: link, Domain: domain}
 		}
 		close(jobs)
 	}()
@@ -140,27 +173,12 @@ func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 	var allEmails []string
 	for result := range results {
 		if result.Error != nil {
-			// fmt.Printf("Error processing link: %v", result.Error)
+			s.Logger.Error("Error processing link", "link", result.Error)
 			continue
 		}
 		allEmails = append(allEmails, result.Emails...)
 	}
-
-	uniqueEmails := removeDuplicateEmails(allEmails)
-	fmt.Println("The following emails have been extracted:")
-	for _, email := range uniqueEmails {
-		fmt.Printf("\t%s\n", email)
-	}
-	fmt.Println("Total unique emails extracted:", len(uniqueEmails))
-
-	fmt.Printf("Execution time: %s\n", time.Since(startTime))
-
-	return uniqueEmails, nil
-}
-
-func (s *HarvesterService) HarvestSubdomains(target string) ([]string, error) {
-	// TODO: Implementation pending
-	return nil, nil
+	return allEmails
 }
 
 // Create a reusable HTTPClient
@@ -235,7 +253,6 @@ func fetchWithRandomUserAgent(url string) (*http.Response, error) {
 func scrapeGoogleLinks(query string) ([]string, error) {
 	searchURL := fmt.Sprintf("https://www.google.com/search?num=100&q=%s", url.QueryEscape(query))
 
-	fmt.Println("Scraping Google Links...")
 	// Make HTTP request
 	resp, err := fetchWithRandomUserAgent(searchURL)
 	if err != nil {
@@ -265,7 +282,6 @@ func scrapeGoogleLinks(query string) ([]string, error) {
 				fmt.Printf("failed to parse redirection URL %s: %s", href, err.Error())
 				return
 			}
-			fmt.Printf("Found valid url: %s\n", parsedURL.String())
 
 			urlString := parsedURL.String()
 			if !strings.HasPrefix(urlString, "https://") {
@@ -276,7 +292,6 @@ func scrapeGoogleLinks(query string) ([]string, error) {
 		}
 	})
 
-	fmt.Printf("Found %d Google links...\n", len(links))
 	return links, nil
 }
 
@@ -286,7 +301,6 @@ func scrapeLinkedinLinks(query string) ([]string, error) {
 		url.QueryEscape(query),
 	)
 
-	fmt.Println("Scraping LinkedIn links with Google...")
 	resp, err := fetchWithRandomUserAgent(searchURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch linkedin search results: %w", err)
@@ -307,18 +321,15 @@ func scrapeLinkedinLinks(query string) ([]string, error) {
 	doc.Find("a").Each(func(i int, sel *goquery.Selection) {
 		// Check attributes
 		href, exists := sel.Attr("href")
-		// fmt.Printf("Found href: %s attrib on a attr: %s\n", href, sel.Text())
 		if exists && !strings.HasPrefix(href, "/search?q=site:") {
 			// Clean the Google redirection
 			parsedURL, err := url.Parse(href)
 			if err != nil {
-				// fmt.Printf("failed to parse redirection URL %s: %s\n", href, err)
 				return
 			}
 
 			urlString := parsedURL.String()
 			if !strings.HasPrefix(urlString, "https://") {
-				// fmt.Printf("only HTTPS connections are allowed: %s\n", urlString)
 				return
 			}
 
@@ -326,7 +337,6 @@ func scrapeLinkedinLinks(query string) ([]string, error) {
 		}
 	})
 
-	fmt.Printf("Found %d LinkedIn links...\n", len(links))
 	return links, nil
 }
 
@@ -373,7 +383,6 @@ func extractEmailsFromHTML(domain string, doc *goquery.Document) ([]string, erro
 		text := decodeHTMLEntities(s.Text())
 		emails := emailRegex.FindAllString(text, -1)
 		for _, email := range emails {
-			// fmt.Println("Found match:", email)
 			emailSet[email] = struct{}{}
 		}
 
@@ -421,4 +430,10 @@ func decodeHTMLEntities(input string) string {
 func buildEmailRegexp(domain string) *regexp.Regexp {
 	emailRegexpPattern := fmt.Sprintf(`[a-zA-Z0-9._%%+-]+@(?:\w*\.)?%s`, regexp.QuoteMeta(domain))
 	return regexp.MustCompile(emailRegexpPattern)
+}
+
+// randomTimeout does time.Sleep() for a random amount of seconds between min and max
+func randomTimeout(min, max int) {
+	d := rand.Intn(max-min) + min
+	time.Sleep(time.Second * time.Duration(d))
 }
