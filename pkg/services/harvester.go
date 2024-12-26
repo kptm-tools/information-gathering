@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -95,17 +96,18 @@ func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 
 	linkedInLinks, err := scrapeLinkedinLinks(target)
 	if err != nil {
-		return nil, fmt.Errorf("error scraping links: %v", err)
+		return nil, fmt.Errorf("error scraping linkedin links: %v", err)
 	}
 
 	time.Sleep(5 * time.Second)
 	googleLinks, err := scrapeGoogleLinks(target)
 	if err != nil {
-		return nil, fmt.Errorf("error scraping links: %v", err)
+		return nil, fmt.Errorf("error scraping google links: %v", err)
 	}
 
 	links = append(links, linkedInLinks...)
 	links = append(links, googleLinks...)
+	log.Printf("Found %d total links...\n", len(links))
 
 	// Create channels for jobs and results
 	numWorkers := 5
@@ -152,7 +154,7 @@ func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 
 	fmt.Printf("Execution time: %s\n", time.Since(startTime))
 
-	return nil, nil
+	return uniqueEmails, nil
 }
 
 func (s *HarvesterService) HarvestSubdomains(target string) ([]string, error) {
@@ -274,10 +276,13 @@ func scrapeGoogleLinks(query string) ([]string, error) {
 }
 
 func scrapeLinkedinLinks(query string) ([]string, error) {
-	searchURL := fmt.Sprintf("https://www.google.com/search?num=100&q=site:linkedin.com+%s", url.QueryEscape(query))
+	searchURL := fmt.Sprintf(
+		"https://www.google.com/search?num=100&q=site:linkedin.com+%s",
+		url.QueryEscape(query),
+	)
 
 	fmt.Println("Scraping LinkedIn links with Google...")
-	resp, err := fetchWithCustomHeaders(searchURL, map[string]string{})
+	resp, err := fetchWithRandomUserAgent(searchURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch linkedin search results: %w", err)
 	}
@@ -297,17 +302,18 @@ func scrapeLinkedinLinks(query string) ([]string, error) {
 	doc.Find("a").Each(func(i int, sel *goquery.Selection) {
 		// Check attributes
 		href, exists := sel.Attr("href")
-		if exists {
-			// Clean the Yahoo redirection
+		fmt.Printf("Found href: %s attrib on a attr: %s", href, sel.Text())
+		if exists && !strings.HasPrefix(href, "/search?q=site:") {
+			// Clean the Google redirection
 			parsedURL, err := url.Parse(href)
 			if err != nil {
-				// fmt.Printf("failed to parse redirection URL %s: %s", href, err)
+				fmt.Printf("failed to parse redirection URL %s: %s", href, err)
 				return
 			}
 
 			urlString := parsedURL.String()
 			if !strings.HasPrefix(urlString, "https://") {
-				// fmt.Printf("only HTTPS connections are allowed: %s", urlString)
+				fmt.Printf("only HTTPS connections are allowed: %s", urlString)
 				return
 			}
 
