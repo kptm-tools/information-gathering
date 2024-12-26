@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -21,11 +20,13 @@ import (
 // List of User-Agent strings
 var userAgents = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-	"Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-	"Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-	"Mozilla/5.0 (Android 10; Mobile; rv:89.0) Gecko/89.0 Firefox/89.0",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 OPR/109.0.0.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 14.4; rv:124.0) Gecko/20100101 Firefox/124.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 OPR/109.0.0.0",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (X11; Linux i686; rv:124.0) Gecko/20100101 Firefox/124.0",
 }
 
 // Job defines a job struct with attributes accessed by workers to extract emails
@@ -107,7 +108,7 @@ func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 
 	links = append(links, linkedInLinks...)
 	links = append(links, googleLinks...)
-	log.Printf("Found %d total links...\n", len(links))
+	fmt.Printf("Found %d total links...\n", len(links))
 
 	// Create channels for jobs and results
 	numWorkers := 5
@@ -256,18 +257,22 @@ func scrapeGoogleLinks(query string) ([]string, error) {
 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
 		// Check attributes
 		href, exists := s.Attr("href")
-		if exists && strings.Contains(href, "/url?q=") {
+		// fmt.Printf("Found href: %s attrib on a attr: %s\n", href, s.Text())
+		if exists && !strings.HasPrefix(href, "/search?q=") {
 			// Clean the Google redirection
 			parsedURL, err := url.Parse(href)
 			if err != nil {
 				fmt.Printf("failed to parse redirection URL %s: %s", href, err.Error())
 				return
 			}
+			fmt.Printf("Found valid url: %s\n", parsedURL.String())
 
-			cleanLink := parsedURL.Query().Get("q")
-			if cleanLink != "" {
-				links = append(links, cleanLink)
+			urlString := parsedURL.String()
+			if !strings.HasPrefix(urlString, "https://") {
+				// fmt.Printf("only HTTPS connections are allowed: %s\n", urlString)
+				return
 			}
+			links = append(links, urlString)
 		}
 	})
 
@@ -302,18 +307,18 @@ func scrapeLinkedinLinks(query string) ([]string, error) {
 	doc.Find("a").Each(func(i int, sel *goquery.Selection) {
 		// Check attributes
 		href, exists := sel.Attr("href")
-		fmt.Printf("Found href: %s attrib on a attr: %s", href, sel.Text())
+		// fmt.Printf("Found href: %s attrib on a attr: %s\n", href, sel.Text())
 		if exists && !strings.HasPrefix(href, "/search?q=site:") {
 			// Clean the Google redirection
 			parsedURL, err := url.Parse(href)
 			if err != nil {
-				fmt.Printf("failed to parse redirection URL %s: %s", href, err)
+				// fmt.Printf("failed to parse redirection URL %s: %s\n", href, err)
 				return
 			}
 
 			urlString := parsedURL.String()
 			if !strings.HasPrefix(urlString, "https://") {
-				fmt.Printf("only HTTPS connections are allowed: %s", urlString)
+				// fmt.Printf("only HTTPS connections are allowed: %s\n", urlString)
 				return
 			}
 
