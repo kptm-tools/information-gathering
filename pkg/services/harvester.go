@@ -41,14 +41,6 @@ type Result struct {
 	Error  error
 }
 
-func worker(jobs <-chan Job, results chan<- Result, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for job := range jobs {
-		emails, err := extractEmailsFromPage(job.Domain, job.Link)
-		results <- Result{Emails: emails, Error: err}
-	}
-}
-
 type HarvesterService struct {
 	Logger *slog.Logger
 }
@@ -69,17 +61,24 @@ func (s *HarvesterService) RunScan(targets []string) ([]cmmn.TargetResult, error
 
 	// To avoid rate-limiting, we don't use coroutines here
 	for _, target := range targets {
+		tRes := cmmn.TargetResult{
+			Target: target,
+		}
 
 		emails, err := s.HarvestEmails(target)
 		if err != nil {
 			s.Logger.Error("Error harvesting emails", "target", target, "error", err)
 			errs = append(errs, err)
+			tRes.Results["harvester"] = cmmn.HarvesterResult{
+				Error: err.Error(),
+			}
 			continue
 		}
 
-		tRes := cmmn.TargetResult{
-			Target:  target,
-			Results: map[string]interface{}{"harvester": emails},
+		tRes.Results["harvester"] = cmmn.HarvesterResult{
+			Emails:     emails,
+			Subdomains: []string{""},
+			Error:      "",
 		}
 
 		tResults = append(tResults, tRes)
@@ -179,6 +178,14 @@ func (s *HarvesterService) processLinks(links []string, domain string) []string 
 		allEmails = append(allEmails, result.Emails...)
 	}
 	return allEmails
+}
+
+func worker(jobs <-chan Job, results chan<- Result, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for job := range jobs {
+		emails, err := extractEmailsFromPage(job.Domain, job.Link)
+		results <- Result{Emails: emails, Error: err}
+	}
 }
 
 // Create a reusable HTTPClient
