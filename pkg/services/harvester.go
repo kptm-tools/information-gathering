@@ -1,11 +1,14 @@
 package services
 
 import (
+	"bufio"
 	"fmt"
 	"log/slog"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -28,6 +31,18 @@ var userAgents = []string{
 	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
 	"Mozilla/5.0 (X11; Linux i686; rv:124.0) Gecko/20100101 Firefox/124.0",
 }
+
+var wordLists = map[wordListSize]string{
+	WordListMedium: "subdomains-1000.txt",
+	WordListLarge:  "subdomains-10000.txt",
+}
+
+const (
+	WordListLarge  wordListSize = "large"
+	WordListMedium wordListSize = "medium"
+)
+
+type wordListSize string
 
 // Job defines a job struct with attributes accessed by workers to extract emails
 type Job struct {
@@ -62,7 +77,8 @@ func (s *HarvesterService) RunScan(targets []string) ([]cmmn.TargetResult, error
 	// To avoid rate-limiting, we don't use coroutines here
 	for _, target := range targets {
 		tRes := cmmn.TargetResult{
-			Target: target,
+			Target:  target,
+			Results: make(map[string]interface{}),
 		}
 
 		emails, err := s.HarvestEmails(target)
@@ -75,9 +91,20 @@ func (s *HarvesterService) RunScan(targets []string) ([]cmmn.TargetResult, error
 			continue
 		}
 
+		subdomains, err := s.HarvestSubdomains(target)
+		if err != nil {
+			s.Logger.Error("Error harvesting subdomains", "target", target, "error", err)
+			errs = append(errs, err)
+			tRes.Results["harvester"] = cmmn.HarvesterResult{
+				Error: err.Error(),
+			}
+			tResults = append(tResults, tRes)
+			continue
+		}
+
 		tRes.Results["harvester"] = cmmn.HarvesterResult{
 			Emails:     emails,
-			Subdomains: []string{""},
+			Subdomains: subdomains,
 			Error:      "",
 		}
 
@@ -116,8 +143,113 @@ func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 }
 
 func (s *HarvesterService) HarvestSubdomains(target string) ([]string, error) {
-	// TODO: Implementation pending
-	return nil, nil
+	startTime := time.Now()
+	s.Logger.Info("Harvesting subdomains", "target", target)
+	words, err := s.readWordList(WordListLarge)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		subdomains []string
+		mu         sync.Mutex
+		wg         sync.WaitGroup
+		results    = make(chan string, len(words))
+		sem        = make(chan struct{}, 10) // Semaphore for rate limiting (10 goroutines at a time)
+	)
+
+	// Process each word
+	for _, word := range words {
+		wg.Add(1)
+		go func(word string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }() // Release semaphore
+
+			subdomain, err := s.processSubdomain(word, target)
+			if err != nil {
+				// Subdomain does not exist
+				s.Logger.Debug("Subdomain does not exist", "word", word, "error", err)
+				return
+			}
+			if subdomain != "" {
+				results <- subdomain
+			}
+
+		}(word)
+	}
+
+	// Close results channel once all goroutines finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results from channel
+	for subdomain := range results {
+		mu.Lock()
+		subdomains = append(subdomains, subdomain)
+		mu.Unlock()
+	}
+
+	s.Logger.Info("Completed subdomain harvesting",
+		"target", target,
+		"subdomain_count", len(subdomains),
+		"subdomains", subdomains,
+		"duration", time.Since(startTime).String(),
+	)
+	return subdomains, nil
+}
+
+// readWordList reads a wordList file by its size (e.g., Large, medium, small)
+func (s *HarvesterService) readWordList(size wordListSize) ([]string, error) {
+	fileName, exists := wordLists[size]
+	if !exists {
+		return nil, fmt.Errorf("wordlist not found for key: %s", size)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	path := filepath.Join(wd, "pkg", "services", "wordlists", fileName)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var subdomains []string
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		subdomains = append(subdomains, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return subdomains, nil
+}
+
+// processSubdomain processes a single word to check if the subdomain exists
+func (s *HarvesterService) processSubdomain(word, domain string) (string, error) {
+	url := fmt.Sprintf("http://%s.%s", word, domain)
+	res, err := fetchWithRandomUserAgent(url)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusOK {
+		s.Logger.Info("✅ Found subdomain", "subdomain", url)
+		return url, nil
+	}
+
+	return "", nil
+
 }
 
 func (s *HarvesterService) scrapeLinks(target string) ([]string, error) {
@@ -231,7 +363,7 @@ func isValidHTTPMethod(method string) bool {
 
 // Perform a GET request with custom HTTP headers
 func fetchWithCustomHeaders(url string, headers map[string]string) (*http.Response, error) {
-	client := createHTTPClient(5 * time.Second)
+	client := createHTTPClient(2 * time.Second)
 	req, err := createHTTPRequest("GET", url, headers)
 	if err != nil {
 		return nil, err
