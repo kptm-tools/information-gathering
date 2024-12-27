@@ -37,7 +37,7 @@ func (s *DNSLookupService) RunScan(targets []string) (*[]cmmn.TargetResult, erro
 	wg.Add(len(targets))
 	for _, target := range targets {
 		if !isValidDomain(target) {
-			s.Logger.Error("Not a valid domain: %s", target, 123)
+			s.Logger.Error("Not a valid domain", "domain", target)
 			continue
 		}
 
@@ -46,7 +46,7 @@ func (s *DNSLookupService) RunScan(targets []string) (*[]cmmn.TargetResult, erro
 
 			result, err := performDNSLookup(target)
 			if err != nil {
-				s.Logger.Error("Error performing DNSLookup for target ", target, err)
+				s.Logger.Error("Error performing DNSLookup for target ", "target", target, "error", err)
 				mu.Lock()
 				errs = append(errs, err...)
 				mu.Unlock()
