@@ -152,10 +152,9 @@ func (s *HarvesterService) HarvestSubdomains(target string) ([]string, error) {
 
 	var (
 		subdomains []string
-		mu         sync.Mutex
 		wg         sync.WaitGroup
 		results    = make(chan string, len(words))
-		sem        = make(chan struct{}, 10) // Semaphore for rate limiting (10 goroutines at a time)
+		sem        = make(chan struct{}, 5) // Semaphore for rate limiting (5 goroutines at a time)
 	)
 
 	// Process each word
@@ -187,9 +186,7 @@ func (s *HarvesterService) HarvestSubdomains(target string) ([]string, error) {
 
 	// Collect results from channel
 	for subdomain := range results {
-		mu.Lock()
 		subdomains = append(subdomains, subdomain)
-		mu.Unlock()
 	}
 
 	s.Logger.Info("Completed subdomain harvesting",
@@ -237,7 +234,7 @@ func (s *HarvesterService) readWordList(size wordListSize) ([]string, error) {
 // processSubdomain processes a single word to check if the subdomain exists
 func (s *HarvesterService) processSubdomain(word, domain string) (string, error) {
 	url := fmt.Sprintf("http://%s.%s", word, domain)
-	res, err := fetchWithRandomUserAgent(url)
+	res, err := http.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -304,7 +301,7 @@ func (s *HarvesterService) processLinks(links []string, domain string) []string 
 	var allEmails []string
 	for result := range results {
 		if result.Error != nil {
-			s.Logger.Error("Error processing link", "link", result.Error)
+			s.Logger.Debug("Error processing link", "link", result.Error)
 			continue
 		}
 		allEmails = append(allEmails, result.Emails...)
