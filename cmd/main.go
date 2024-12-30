@@ -12,12 +12,23 @@ func main() {
 
 	// Services
 	whoIsService := services.NewWhoIsService()
+	dnsLookupService := services.NewDNSLookupService()
+	harvesterService := services.NewHarvesterService()
 
 	// Handlers
 	whoIsHandler := handlers.NewWhoIsHandler(whoIsService)
+	dnsLookupHandler := handlers.NewDNSLookupHandler(dnsLookupService)
+	harvesterHandler := handlers.NewHarvesterHandler(harvesterService)
 
-	err := whoIsHandler.RunScan()
-	if err != nil {
+	if err := whoIsHandler.RunScan(); err != nil {
+		panic(err)
+	}
+
+	if err := dnsLookupHandler.RunScan(); err != nil {
+		panic(err)
+	}
+
+	if err := harvesterHandler.RunScan(); err != nil {
 		panic(err)
 	}
 

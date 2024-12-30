@@ -45,17 +45,6 @@ run/live:
 		--build.include_ext "go, tpl, tmpl, html, css, scss, js, ts, sql, jpeg, jpg, git, png, bmp, wbp, ico" \
 		--misc.clean_on_exit "true"
 
-## populate: populate DB with sample data
-.PHONY: populate
-populate:
-	go run ${sample_package_path} populate
-
-## clear: clear DB tables
-.PHONY: clear
-clear: confirm
-	go run ${sample_package_path} clear
-
-
 # ==================================================================================== #
 # QUALITY CONTROL
 # ==================================================================================== #

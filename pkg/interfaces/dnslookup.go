@@ -2,10 +2,10 @@ package interfaces
 
 import "github.com/kptm-tools/common/common/results"
 
-type IWhoIsService interface {
+type IDNSLookupService interface {
 	RunScan(targets []string) (*[]results.TargetResult, error)
 }
 
-type IWhoIsHandler interface {
+type IDNSLookupHandler interface {
 	RunScan() error
 }

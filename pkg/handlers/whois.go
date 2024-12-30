@@ -21,11 +21,13 @@ func NewWhoIsHandler(whoIsService interfaces.IWhoIsService) *WhoIsHandler {
 func (h *WhoIsHandler) RunScan() error {
 	// Parse targets from StartSCAN event:
 	targets := []string{"whois.verisign-grs.com", "i2linked.com", "twitterapp.devteamdelta.org", "thissubdomaindoesnotexist.devteamdelta.org"}
-	res, err := h.whoIsService.RunScan(targets)
+	results, err := h.whoIsService.RunScan(targets)
 
 	if err != nil {
 		return err
 	}
-	fmt.Println(res.String())
+	for _, res := range *results {
+		fmt.Println(res.String())
+	}
 	return nil
 }
