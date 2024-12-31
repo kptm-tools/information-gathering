@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	cmmn "github.com/kptm-tools/common/common/events"
 	"github.com/kptm-tools/information-gathering/pkg/config"
@@ -41,12 +44,15 @@ func main() {
 		log.Fatalf("Failed to initialize Event Bus: %s", err.Error())
 	}
 
-	go forever()
-	select {}
+	waitForShutdown()
 
 }
 
-func forever() {
-	for {
-	}
+func waitForShutdown() {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block until a signal is received
+	<-stop
+	fmt.Println("Shutting down gracefully...")
 }
