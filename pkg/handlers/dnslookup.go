@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 
+	"github.com/kptm-tools/common/common/events"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -18,8 +19,9 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 	}
 }
 
-func (h *DNSLookupHandler) RunScan() error {
-	targets := []string{"i2linked.com", "devteamdelta.org"}
+func (h *DNSLookupHandler) RunScan(event events.ScanStartedEvent) error {
+	// 1. Parse targets from Event
+	targets := event.Targets
 	results, err := h.dnsLookupService.RunScan(targets)
 	if err != nil {
 		return err
@@ -27,6 +29,8 @@ func (h *DNSLookupHandler) RunScan() error {
 	for _, res := range *results {
 		fmt.Println(res.String())
 	}
+
+	// 2. Publish DNSLookup Event
 
 	return nil
 }

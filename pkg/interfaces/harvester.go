@@ -1,6 +1,9 @@
 package interfaces
 
-import "github.com/kptm-tools/common/common/results"
+import (
+	"github.com/kptm-tools/common/common/events"
+	"github.com/kptm-tools/common/common/results"
+)
 
 type IHarvesterService interface {
 	RunScan(targets []string) ([]results.TargetResult, error)
@@ -9,5 +12,5 @@ type IHarvesterService interface {
 }
 
 type IHarvesterHandler interface {
-	RunScan() error
+	RunScan(events.ScanStartedEvent) error
 }

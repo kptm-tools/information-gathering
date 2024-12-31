@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 
+	"github.com/kptm-tools/common/common/events"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -18,9 +19,10 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 	}
 }
 
-func (h *HarvesterHandler) RunScan() error {
+func (h *HarvesterHandler) RunScan(event events.ScanStartedEvent) error {
 
-	targets := []string{"aynitech.com", "kriptome.com"}
+	// 1. Parse targets from event
+	targets := event.Targets
 	results, err := h.harvesterService.RunScan(targets)
 	if err != nil {
 		return err
@@ -29,6 +31,8 @@ func (h *HarvesterHandler) RunScan() error {
 	for _, res := range results {
 		fmt.Println(res.String())
 	}
+
+	// 2. Publish HarvesterEvent to bus
 
 	return nil
 }

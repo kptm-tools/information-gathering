@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 
+	"github.com/kptm-tools/common/common/events"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -18,9 +19,9 @@ func NewWhoIsHandler(whoIsService interfaces.IWhoIsService) *WhoIsHandler {
 	}
 }
 
-func (h *WhoIsHandler) RunScan() error {
-	// Parse targets from StartSCAN event:
-	targets := []string{"whois.verisign-grs.com", "i2linked.com", "twitterapp.devteamdelta.org", "thissubdomaindoesnotexist.devteamdelta.org"}
+func (h *WhoIsHandler) RunScan(event events.ScanStartedEvent) error {
+	// 1. Parse targets from StartSCAN event:
+	targets := event.Targets
 	results, err := h.whoIsService.RunScan(targets)
 
 	if err != nil {
@@ -29,5 +30,7 @@ func (h *WhoIsHandler) RunScan() error {
 	for _, res := range *results {
 		fmt.Println(res.String())
 	}
+
+	// 2. Publish WhoIs Event to bus
 	return nil
 }
