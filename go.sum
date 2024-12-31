@@ -4,8 +4,8 @@ github.com/andybalholm/cascadia v1.3.2 h1:3Xi6Dw5lHF15JtdcmAHD3i1+T8plmv7BQ/nsVi
 github.com/andybalholm/cascadia v1.3.2/go.mod h1:7gtRlve5FxPPgIgX36uWBX58OdBsSS6lUvCFb+h7KvU=
 github.com/klauspost/compress v1.17.9 h1:6KIumPrER1LHsvBVuDa0r5xaG0Es51mhhB9BQB2qeMA=
 github.com/klauspost/compress v1.17.9/go.mod h1:Di0epgTjJY877eYKx5yC51cX2A2Vl2ibi7bDH9ttBbw=
-github.com/kptm-tools/common v1.2.0 h1:2idugQzaHc/Y4bykN7H9HR3+5HO8UVr503BmN4Zeikk=
-github.com/kptm-tools/common v1.2.0/go.mod h1:/xGzfkx6dmO1JDxqNU0OGumqlJq/U4j5XmMG85W3P4s=
+github.com/kptm-tools/common v1.2.1 h1:zqgy/p0XgnCdXRJqIpA6zob4vIQE28TlG40lBfb5cEY=
+github.com/kptm-tools/common v1.2.1/go.mod h1:/xGzfkx6dmO1JDxqNU0OGumqlJq/U4j5XmMG85W3P4s=
 github.com/likexian/gokit v0.25.15 h1:QjospM1eXhdMMHwZRpMKKAHY/Wig9wgcREmLtf9NslY=
 github.com/likexian/gokit v0.25.15/go.mod h1:S2QisdsxLEHWeD/XI0QMVeggp+jbxYqUxMvSBil7MRg=
 github.com/likexian/whois v1.15.5 h1:gpPxyCTJtLtJDmakHCo//0ZjK/ocI01GCAd/WBJ2oH8=

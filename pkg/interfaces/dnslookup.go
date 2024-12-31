@@ -1,11 +1,14 @@
 package interfaces
 
-import "github.com/kptm-tools/common/common/results"
+import (
+	"github.com/kptm-tools/common/common/events"
+	"github.com/kptm-tools/common/common/results"
+)
 
 type IDNSLookupService interface {
 	RunScan(targets []string) (*[]results.TargetResult, error)
 }
 
 type IDNSLookupHandler interface {
-	RunScan() error
+	RunScan(events.ScanStartedEvent) error
 }

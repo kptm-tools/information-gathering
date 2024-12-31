@@ -30,19 +30,19 @@ func SubscribeToScanStarted(
 		log.Printf("Payload: %+v\n", payload)
 
 		// 2. Call our handlers for each tool
-		err := whoIsHandler.RunScan()
+		err := whoIsHandler.RunScan(payload)
 		if err != nil {
 			log.Printf("Error on WhoIsHandler: %s", err.Error())
 			// Publish the result
 		}
 
-		err = dnsLookupHandler.RunScan()
+		err = dnsLookupHandler.RunScan(payload)
 		if err != nil {
 			log.Printf("Error on WhoIsHandler: %s", err.Error())
 			// Publish the result
 		}
 
-		err = harvesterHandler.RunScan()
+		err = harvesterHandler.RunScan(payload)
 		if err != nil {
 			log.Printf("Error on HarvesterHandler: %s", err.Error())
 			// Publish the result
