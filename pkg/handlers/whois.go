@@ -21,7 +21,11 @@ func NewWhoIsHandler(whoIsService interfaces.IWhoIsService) *WhoIsHandler {
 
 func (h *WhoIsHandler) RunScan(event events.ScanStartedEvent) error {
 	// 1. Parse targets from StartSCAN event:
-	targets := event.Targets
+	targets := event.GetDomainValues()
+
+	if len(targets) == 0 {
+		return fmt.Errorf("no valid targets")
+	}
 	results, err := h.whoIsService.RunScan(targets)
 
 	if err != nil {

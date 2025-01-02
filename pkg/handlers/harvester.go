@@ -22,7 +22,12 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 func (h *HarvesterHandler) RunScan(event events.ScanStartedEvent) error {
 
 	// 1. Parse targets from event
-	targets := event.Targets
+	targets := event.GetDomainValues()
+
+	if len(targets) == 0 {
+		return fmt.Errorf("no valid targets")
+	}
+
 	results, err := h.harvesterService.RunScan(targets)
 	if err != nil {
 		return err
