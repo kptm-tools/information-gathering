@@ -20,8 +20,13 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 }
 
 func (h *DNSLookupHandler) RunScan(event events.ScanStartedEvent) error {
-	// 1. Parse targets from Event
-	targets := event.Targets
+	// 1. Parse targets from Event (targets must be domain or IP)
+	targets := event.GetDomainValues()
+
+	if len(targets) == 0 {
+		return fmt.Errorf("no valid targets")
+	}
+
 	results, err := h.dnsLookupService.RunScan(targets)
 	if err != nil {
 		return err
