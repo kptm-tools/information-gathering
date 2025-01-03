@@ -72,7 +72,7 @@ func (s *WhoIsService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
 			mu.Lock()
 			tRes := cmmn.TargetResult{
 				Target:  target,
-				Results: map[string]interface{}{"whois": parsedResult},
+				Results: map[cmmn.ServiceName]interface{}{cmmn.ServiceWhoIs: parsedResult},
 			}
 			tResults = append(tResults, tRes)
 			mu.Unlock()

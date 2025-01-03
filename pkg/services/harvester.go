@@ -78,14 +78,14 @@ func (s *HarvesterService) RunScan(targets []string) ([]cmmn.TargetResult, error
 	for _, target := range targets {
 		tRes := cmmn.TargetResult{
 			Target:  target,
-			Results: make(map[string]interface{}),
+			Results: make(map[cmmn.ServiceName]interface{}),
 		}
 
 		emails, err := s.HarvestEmails(target)
 		if err != nil {
 			s.Logger.Error("Error harvesting emails", "target", target, "error", err)
 			errs = append(errs, err)
-			tRes.Results["harvester"] = cmmn.HarvesterResult{
+			tRes.Results[cmmn.ServiceHarvester] = cmmn.HarvesterResult{
 				Error: err.Error(),
 			}
 			continue
@@ -95,14 +95,14 @@ func (s *HarvesterService) RunScan(targets []string) ([]cmmn.TargetResult, error
 		if err != nil {
 			s.Logger.Error("Error harvesting subdomains", "target", target, "error", err)
 			errs = append(errs, err)
-			tRes.Results["harvester"] = cmmn.HarvesterResult{
+			tRes.Results[cmmn.ServiceHarvester] = cmmn.HarvesterResult{
 				Error: err.Error(),
 			}
 			tResults = append(tResults, tRes)
 			continue
 		}
 
-		tRes.Results["harvester"] = cmmn.HarvesterResult{
+		tRes.Results[cmmn.ServiceHarvester] = cmmn.HarvesterResult{
 			Emails:     emails,
 			Subdomains: subdomains,
 			Error:      "",
