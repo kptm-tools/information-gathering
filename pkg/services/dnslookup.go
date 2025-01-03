@@ -55,7 +55,7 @@ func (s *DNSLookupService) RunScan(targets []string) (*[]cmmn.TargetResult, erro
 
 			tResult := cmmn.TargetResult{
 				Target:  domain,
-				Results: map[string]interface{}{"dnslookup": result},
+				Results: map[cmmn.ServiceName]interface{}{cmmn.ServiceHarvester: result},
 			}
 
 			mu.Lock()
