@@ -8,6 +8,8 @@ github.com/kptm-tools/common v1.2.5 h1:+V8b9IyxGqFzXokH707P4MjOGt64r10Od3uoovwRT
 github.com/kptm-tools/common v1.2.5/go.mod h1:rbiN3iX3544CBJ4N1As02OH7lkdO1LRBsUuA8+JGKXY=
 github.com/kptm-tools/common v1.2.8 h1:Jb45XyL/FwV3fJyqB8ru16p2OF1LxNsUMw8/TukJdMw=
 github.com/kptm-tools/common v1.2.8/go.mod h1:rbiN3iX3544CBJ4N1As02OH7lkdO1LRBsUuA8+JGKXY=
+github.com/kptm-tools/common v1.2.9 h1:Od300Roo+Q2MKxbnJRGjQs4g8nw2t0p435HAM1s7VIA=
+github.com/kptm-tools/common v1.2.9/go.mod h1:rbiN3iX3544CBJ4N1As02OH7lkdO1LRBsUuA8+JGKXY=
 github.com/likexian/gokit v0.25.15 h1:QjospM1eXhdMMHwZRpMKKAHY/Wig9wgcREmLtf9NslY=
 github.com/likexian/gokit v0.25.15/go.mod h1:S2QisdsxLEHWeD/XI0QMVeggp+jbxYqUxMvSBil7MRg=
 github.com/likexian/whois v1.15.5 h1:gpPxyCTJtLtJDmakHCo//0ZjK/ocI01GCAd/WBJ2oH8=
