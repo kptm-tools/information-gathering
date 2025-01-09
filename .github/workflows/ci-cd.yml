@@ -1,11 +1,11 @@
 name: CI/CD Pipeline
 
 on:
-  # Trigger on pushes to dev and main branches, and on pull requests
+  # Trigger on pushes to dev and staging branches, and on pull requests
   push:
     branches:
       - dev
-      - main
+      - staging
 
 env:
   IMAGE_NAME: information_gathering
