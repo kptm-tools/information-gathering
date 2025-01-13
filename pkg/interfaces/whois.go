@@ -10,5 +10,5 @@ type IWhoIsService interface {
 }
 
 type IWhoIsHandler interface {
-	RunScan(events.ScanStartedEvent) error
+	RunScan(events.ScanStartedEvent) ([]results.TargetResult, error)
 }

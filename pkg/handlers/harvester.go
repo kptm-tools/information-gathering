@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kptm-tools/common/common/events"
+	"github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -19,18 +20,18 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 	}
 }
 
-func (h *HarvesterHandler) RunScan(event events.ScanStartedEvent) error {
+func (h *HarvesterHandler) RunScan(event events.ScanStartedEvent) ([]results.TargetResult, error) {
 
 	// 1. Parse targets from event
 	targets := event.GetDomainValues()
 
 	if len(targets) == 0 {
-		return fmt.Errorf("no valid targets")
+		return nil, fmt.Errorf("no valid targets")
 	}
 
 	results, err := h.harvesterService.RunScan(targets)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, res := range results {
@@ -39,5 +40,5 @@ func (h *HarvesterHandler) RunScan(event events.ScanStartedEvent) error {
 
 	// 2. Publish HarvesterEvent to bus
 
-	return nil
+	return results, nil
 }

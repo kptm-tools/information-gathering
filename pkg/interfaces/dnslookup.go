@@ -10,5 +10,5 @@ type IDNSLookupService interface {
 }
 
 type IDNSLookupHandler interface {
-	RunScan(events.ScanStartedEvent) error
+	RunScan(events.ScanStartedEvent) ([]results.TargetResult, error)
 }

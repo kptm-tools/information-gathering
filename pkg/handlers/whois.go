@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kptm-tools/common/common/events"
+	"github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -19,22 +20,22 @@ func NewWhoIsHandler(whoIsService interfaces.IWhoIsService) *WhoIsHandler {
 	}
 }
 
-func (h *WhoIsHandler) RunScan(event events.ScanStartedEvent) error {
+func (h *WhoIsHandler) RunScan(event events.ScanStartedEvent) ([]results.TargetResult, error) {
 	// 1. Parse targets from StartSCAN event:
 	targets := event.GetDomainValues()
 
 	if len(targets) == 0 {
-		return fmt.Errorf("no valid targets")
+		return nil, fmt.Errorf("no valid targets")
 	}
 	results, err := h.whoIsService.RunScan(targets)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, res := range *results {
 		fmt.Println(res.String())
 	}
 
 	// 2. Publish WhoIs Event to bus
-	return nil
+	return *results, nil
 }

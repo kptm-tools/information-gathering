@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kptm-tools/common/common/events"
+	"github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -19,17 +20,17 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 	}
 }
 
-func (h *DNSLookupHandler) RunScan(event events.ScanStartedEvent) error {
+func (h *DNSLookupHandler) RunScan(event events.ScanStartedEvent) ([]results.TargetResult, error) {
 	// 1. Parse targets from Event (targets must be domain or IP)
 	targets := event.GetDomainValues()
 
 	if len(targets) == 0 {
-		return fmt.Errorf("no valid targets")
+		return nil, fmt.Errorf("no valid targets")
 	}
 
 	results, err := h.dnsLookupService.RunScan(targets)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, res := range *results {
 		fmt.Println(res.String())
@@ -37,5 +38,5 @@ func (h *DNSLookupHandler) RunScan(event events.ScanStartedEvent) error {
 
 	// 2. Publish DNSLookup Event
 
-	return nil
+	return *results, nil
 }

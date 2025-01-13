@@ -145,7 +145,7 @@ func (s *HarvesterService) HarvestEmails(target string) ([]string, error) {
 func (s *HarvesterService) HarvestSubdomains(target string) ([]string, error) {
 	startTime := time.Now()
 	s.Logger.Info("Harvesting subdomains", "target", target)
-	words, err := s.readWordList(WordListLarge)
+	words, err := s.readWordList(WordListMedium)
 	if err != nil {
 		return nil, err
 	}

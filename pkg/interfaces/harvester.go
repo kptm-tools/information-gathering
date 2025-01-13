@@ -12,5 +12,5 @@ type IHarvesterService interface {
 }
 
 type IHarvesterHandler interface {
-	RunScan(events.ScanStartedEvent) error
+	RunScan(events.ScanStartedEvent) ([]results.TargetResult, error)
 }
