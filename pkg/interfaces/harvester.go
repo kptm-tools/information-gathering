@@ -1,16 +1,18 @@
 package interfaces
 
 import (
+	"context"
+
 	"github.com/kptm-tools/common/common/events"
 	"github.com/kptm-tools/common/common/results"
 )
 
 type IHarvesterService interface {
-	RunScan(targets []string) ([]results.TargetResult, error)
-	HarvestEmails(target string) ([]string, error)
-	HarvestSubdomains(target string) ([]string, error)
+	RunScan(ctx context.Context, targets []string) ([]results.TargetResult, error)
+	HarvestEmails(ctx context.Context, target string) ([]string, error)
+	HarvestSubdomains(ctx context.Context, target string) ([]string, error)
 }
 
 type IHarvesterHandler interface {
-	RunScan(events.ScanStartedEvent) <-chan ServiceResult
+	RunScan(context.Context, events.ScanStartedEvent) <-chan ServiceResult
 }

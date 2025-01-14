@@ -1,17 +1,16 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
-	"strings"
 	"sync"
 
+	"github.com/kptm-tools/common/common/enums"
 	cmmn "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/likexian/whois"
 	whoisparser "github.com/likexian/whois-parser"
-	"golang.org/x/net/publicsuffix"
 )
 
 type WhoIsService struct {
@@ -26,7 +25,7 @@ func NewWhoIsService() *WhoIsService {
 	}
 }
 
-func (s *WhoIsService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
+func (s *WhoIsService) RunScan(ctx context.Context, targets []string) ([]cmmn.TargetResult, error) {
 	s.Logger.Info("Running WhoIs scanner...")
 
 	var (
@@ -42,18 +41,26 @@ func (s *WhoIsService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
 		go func(target string) {
 			defer wg.Done()
 
-			targetDomain, err := getDomainFromURL(target)
-			if err != nil {
-				s.Logger.Error("Error parsing domain from URL for target `%s`: %+v, skipping to the next target.\n", target, err)
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
+			select {
+			case <-ctx.Done():
+				s.Logger.Warn("Context cancelled during WhoIs search", "target", target)
 				return
+			default:
+				// Proceed with the operation
 			}
 
-			whoIsRaw, err := whois.Whois(targetDomain)
+			// targetDomain, err := events.ExtractDomain(target)
+			// if err != nil {
+			// 	s.Logger.Error("Error parsing domain from URL skipping to the next target.\n", "target", target, "error", err)
+			// 	mu.Lock()
+			// 	errs = append(errs, err)
+			// 	mu.Unlock()
+			// 	return
+			// }
+
+			whoIsRaw, err := whois.Whois(target)
 			if err != nil {
-				s.Logger.Error("Error fetching WHOIS for target `%s`: %+v, skipping to the next target. \n", targetDomain, err)
+				s.Logger.Error("Error fetching WHOIS, skipping to the next target. \n", "target", target, "error", err)
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
@@ -62,7 +69,7 @@ func (s *WhoIsService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
 
 			parsedResult, err := whoisparser.Parse(whoIsRaw)
 			if err != nil {
-				s.Logger.Error("Error parsing WHOIS data for target `%s`: %+v, skipping to the next target. \n", targetDomain, err)
+				s.Logger.Error("Error parsing WHOIS data, skipping to the next target. \n", "target", target, "error", err)
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
@@ -72,7 +79,7 @@ func (s *WhoIsService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
 			mu.Lock()
 			tRes := cmmn.TargetResult{
 				Target:  target,
-				Results: map[cmmn.ServiceName]interface{}{cmmn.ServiceWhoIs: parsedResult},
+				Results: map[enums.ServiceName]interface{}{enums.ServiceWhoIs: parsedResult},
 			}
 			tResults = append(tResults, tRes)
 			mu.Unlock()
@@ -86,26 +93,4 @@ func (s *WhoIsService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
 	}
 
 	return tResults, nil
-}
-
-func getDomainFromURL(rawURL string) (string, error) {
-	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
-		rawURL = "http://" + rawURL
-	}
-
-	// Parse the URL
-	parsedURL, err := url.Parse(rawURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL: %v", err)
-	}
-
-	hostname := parsedURL.Hostname()
-
-	domain, err := publicsuffix.EffectiveTLDPlusOne(hostname)
-	if err != nil {
-		return "", fmt.Errorf("failed to get the base domain: %v", err)
-	}
-
-	// Return the domain
-	return domain, nil
 }

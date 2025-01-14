@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 
+	"github.com/kptm-tools/common/common/enums"
 	"github.com/kptm-tools/common/common/events"
 	cmmn "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
@@ -24,34 +26,41 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 	}
 }
 
-func (h *DNSLookupHandler) RunScan(event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
+func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
 	c := make(chan interfaces.ServiceResult)
 	// 1. Parse targets from Event (targets must be domain or IP)
 	targets := event.GetDomainValues()
 
 	go func() {
 		defer close(c)
-		if len(targets) == 0 {
+
+		select {
+		case <-ctx.Done():
+			h.logger.Info("DNSLookupHandler: scan cancelled", slog.Any("scanID", event.ScanID))
+			return
+		default:
+			if len(targets) == 0 {
+				c <- interfaces.ServiceResult{
+					ScanID:      event.ScanID,
+					ServiceName: enums.ServiceDNSLookup,
+					Result:      []cmmn.TargetResult{},
+					Err:         fmt.Errorf("no valid targets"),
+				}
+				return
+			}
+
+			results, err := h.dnsLookupService.RunScan(ctx, targets)
+			if err != nil {
+				h.logger.Error("error running DNS handler scan", slog.Any("error", err))
+			}
+
+			h.logger.Debug("DNSLookup Results", slog.Any("results", results))
 			c <- interfaces.ServiceResult{
 				ScanID:      event.ScanID,
-				ServiceName: cmmn.ServiceDNSLookup,
-				Result:      []cmmn.TargetResult{},
-				Err:         fmt.Errorf("no valid targets"),
+				ServiceName: enums.ServiceDNSLookup,
+				Result:      results,
+				Err:         err,
 			}
-			return
-		}
-
-		results, err := h.dnsLookupService.RunScan(targets)
-		if err != nil {
-			h.logger.Error("error running DNS handler scan", slog.Any("error", err))
-		}
-
-		h.logger.Debug("DNSLookup Results", slog.Any("results", results))
-		c <- interfaces.ServiceResult{
-			ScanID:      event.ScanID,
-			ServiceName: cmmn.ServiceDNSLookup,
-			Result:      results,
-			Err:         err,
 		}
 	}()
 

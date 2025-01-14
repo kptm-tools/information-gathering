@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 
+	"github.com/kptm-tools/common/common/enums"
 	"github.com/kptm-tools/common/common/events"
 	cmmn "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
@@ -24,7 +26,7 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 	}
 }
 
-func (h *HarvesterHandler) RunScan(event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
+func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
 
 	c := make(chan interfaces.ServiceResult)
 	// 1. Parse targets from event
@@ -32,26 +34,34 @@ func (h *HarvesterHandler) RunScan(event events.ScanStartedEvent) <-chan interfa
 
 	go func() {
 		defer close(c)
-		if len(targets) == 0 {
+
+		select {
+		case <-ctx.Done():
+			h.logger.Info("WhoIsHandler: Scan cancelled", slog.Any("scanID", event.ScanID))
+			return
+		default:
+			if len(targets) == 0 {
+				c <- interfaces.ServiceResult{
+					ScanID:      event.ScanID,
+					ServiceName: enums.ServiceHarvester,
+					Result:      []cmmn.TargetResult{},
+					Err:         fmt.Errorf("no valid targets"),
+				}
+			}
+
+			results, err := h.harvesterService.RunScan(ctx, targets)
+			if err != nil {
+				h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
+			}
+			h.logger.Info("Harvester Results", slog.Any("results", results))
 			c <- interfaces.ServiceResult{
 				ScanID:      event.ScanID,
-				ServiceName: cmmn.ServiceHarvester,
-				Result:      []cmmn.TargetResult{},
-				Err:         fmt.Errorf("no valid targets"),
+				ServiceName: enums.ServiceHarvester,
+				Result:      results,
+				Err:         err,
 			}
 		}
 
-		results, err := h.harvesterService.RunScan(targets)
-		if err != nil {
-			h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
-		}
-		h.logger.Info("Harvester Results", slog.Any("results", results))
-		c <- interfaces.ServiceResult{
-			ScanID:      event.ScanID,
-			ServiceName: cmmn.ServiceHarvester,
-			Result:      results,
-			Err:         err,
-		}
 	}()
 
 	return c
