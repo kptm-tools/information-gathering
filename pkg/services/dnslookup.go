@@ -25,7 +25,7 @@ func NewDNSLookupService() *DNSLookupService {
 	}
 }
 
-func (s *DNSLookupService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
+func (s *DNSLookupService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
 
 	var (
 		targetResults []cmmn.TargetResult
@@ -70,10 +70,10 @@ func (s *DNSLookupService) RunScan(targets []string) (*[]cmmn.TargetResult, erro
 		for _, e := range errs {
 			formattedErrors = append(formattedErrors, e.Error())
 		}
-		return &targetResults, fmt.Errorf("completed with errors:\n%s", strings.Join(formattedErrors, "\n"))
+		return targetResults, fmt.Errorf("completed with errors:\n%s", strings.Join(formattedErrors, "\n"))
 	}
 
-	return &targetResults, nil
+	return targetResults, nil
 }
 
 func performDNSLookup(domain string) (*cmmn.DNSLookupResult, []error) {

@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
+	"sync"
 
 	cmmn "github.com/kptm-tools/common/common/events"
-	res "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/nats-io/nats.go"
 )
@@ -22,54 +21,40 @@ func SubscribeToScanStarted(
 
 	bus.Subscribe("ScanStarted", func(msg *nats.Msg) {
 
-		services := map[res.ServiceName]func(cmmn.ScanStartedEvent) ([]res.TargetResult, error){
-			res.ServiceWhoIs:     whoIsHandler.RunScan,
-			res.ServiceDNSLookup: dnsLookupHandler.RunScan,
-			res.ServiceHarvester: harvesterHandler.RunScan,
-		}
+		go func(msg *nats.Msg) {
 
-		log.Printf("Received ScanStarted Event\n")
-		// 1. Parse the message payload
-		var payload cmmn.ScanStartedEvent
+			log.Printf("Received ScanStarted Event\n")
+			// 1. Parse the message payload
+			var payload cmmn.ScanStartedEvent
 
-		if err := json.Unmarshal(msg.Data, &payload); err != nil {
-			log.Printf("Received invalid JSON payload: %s\n", msg.Data)
-			// 1.1 Publish scan failed
-			return
-		}
-		log.Printf("Payload: %+v\n", payload)
-
-		results := make(chan ServiceResult)
-		ctx, cancel := context.WithCancel(context.Background())
-		// 2. Call our handlers for each tool
-		for name, service := range services {
-			go task(ctx, name, service, payload, results)
-		}
-
-		go func() {
-			time.Sleep(3 * time.Second)
-			log.Println("Cancelling remaining tasks...")
-			cancel()
-		}()
-
-		// 3. When each one finishes, it must publish it's event
-		for i := 0; i < len(services); i++ {
-			select {
-			case r := <-results:
-				if r.Err != nil {
-					log.Printf("Error from %s: %v\n", r.ServiceName, r.Err)
-				} else {
-					log.Println("Results from", r.ServiceName)
-					for _, result := range r.Result {
-						log.Println(result.String())
-					}
+			if err := json.Unmarshal(msg.Data, &payload); err != nil {
+				log.Printf("Received invalid JSON payload: %s\n", msg.Data)
+				// 1.1 Publish scan failed
+				msg, err := json.Marshal(map[string]string{"reason": "Invalid JSON payload", "payload": string(msg.Data)})
+				if err != nil {
+					log.Printf("failed to marshal scan failed payload: %v", err)
 				}
-
-			case <-ctx.Done():
-				log.Println("Context cancelled. Stopping collection")
+				bus.Publish("ScanFailed", msg)
 				return
 			}
-		}
+			log.Printf("Payload: %+v\n", payload)
+
+			// TODO: Implement context for cancellation
+			_, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// 2. Call our handlers for each tool
+			c := fanIn(
+				whoIsHandler.RunScan(payload),
+				dnsLookupHandler.RunScan(payload),
+				harvesterHandler.RunScan(payload),
+			)
+
+			for result := range c {
+				processServiceResult(result)
+			}
+			log.Printf("Finished gathering information for Scan %s!\n", payload.ScanID)
+		}(msg)
 
 	})
 
@@ -77,31 +62,35 @@ func SubscribeToScanStarted(
 
 }
 
-type ServiceResult struct {
-	ScanID      string
-	ServiceName res.ServiceName
-	Result      []res.TargetResult
-	Err         error
+func fanIn(inputs ...<-chan interfaces.ServiceResult) <-chan interfaces.ServiceResult {
+	c := make(chan interfaces.ServiceResult)
+	var wg sync.WaitGroup
+
+	for _, input := range inputs {
+		wg.Add(1)
+		go func(ch <-chan interfaces.ServiceResult) {
+			defer wg.Done()
+			for result := range ch {
+				c <- result
+			}
+		}(input)
+	}
+
+	// Close the channel when wg is done
+	go func() {
+		wg.Wait()
+		close(c)
+	}()
+	return c
 }
 
-func task(ctx context.Context, taskName res.ServiceName, task func(cmmn.ScanStartedEvent) ([]res.TargetResult, error), evt cmmn.ScanStartedEvent, results chan<- ServiceResult) {
-	select {
-	case <-ctx.Done():
-		// Handle cancellation
-		results <- ServiceResult{
-			ScanID:      evt.ScanID,
-			ServiceName: taskName,
-			Result:      []res.TargetResult{},
-			Err:         fmt.Errorf("service %s cancelled", taskName),
-		}
-	default:
-		// Execute the actual task
-		result, err := task(evt)
-		results <- ServiceResult{
-			ServiceName: taskName,
-			Result:      result,
-			Err:         err,
-		}
+func processServiceResult(result interfaces.ServiceResult) {
+	// 3. When each one finishes, it must publish it's event
+	subject := fmt.Sprintf("subject.%s", result.ServiceName)
+	if result.Err != nil {
+		log.Printf("Error posting to %s: %v\n", subject, result.Err)
+		return
 	}
+	log.Printf("Posting result to %s: %+v\n", subject, result)
 
 }

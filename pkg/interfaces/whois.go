@@ -6,9 +6,9 @@ import (
 )
 
 type IWhoIsService interface {
-	RunScan(targets []string) (*[]results.TargetResult, error)
+	RunScan(targets []string) ([]results.TargetResult, error)
 }
 
 type IWhoIsHandler interface {
-	RunScan(events.ScanStartedEvent) ([]results.TargetResult, error)
+	RunScan(events.ScanStartedEvent) <-chan ServiceResult
 }

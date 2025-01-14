@@ -26,7 +26,7 @@ func NewWhoIsService() *WhoIsService {
 	}
 }
 
-func (s *WhoIsService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
+func (s *WhoIsService) RunScan(targets []string) ([]cmmn.TargetResult, error) {
 	s.Logger.Info("Running WhoIs scanner...")
 
 	var (
@@ -82,10 +82,10 @@ func (s *WhoIsService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
 	wg.Wait()
 
 	if len(errs) > 0 {
-		return &tResults, fmt.Errorf("completed with errors: %v", errs)
+		return tResults, fmt.Errorf("completed with errors: %v", errs)
 	}
 
-	return &tResults, nil
+	return tResults, nil
 }
 
 func getDomainFromURL(rawURL string) (string, error) {

@@ -6,9 +6,9 @@ import (
 )
 
 type IDNSLookupService interface {
-	RunScan(targets []string) (*[]results.TargetResult, error)
+	RunScan(targets []string) ([]results.TargetResult, error)
 }
 
 type IDNSLookupHandler interface {
-	RunScan(events.ScanStartedEvent) ([]results.TargetResult, error)
+	RunScan(events.ScanStartedEvent) <-chan ServiceResult
 }
