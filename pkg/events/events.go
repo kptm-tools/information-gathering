@@ -15,16 +15,6 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// ScanCancelledEvent represents the payload for a scan cancellation event.
-// This event signals that a specific scan has been cancelled.
-type ScanCancelledEvent struct {
-	// ScanID is the unique ideantifier of the scan
-	ScanID string `json:"scan_id"`
-
-	// Timestamp is the Unix timestamp when the scan started
-	Timestamp int64 `json:"timestamp"`
-}
-
 var scanContextMap sync.Map
 
 func SubscribeToScanStarted(
@@ -34,7 +24,7 @@ func SubscribeToScanStarted(
 	harvesterHandler interfaces.IHarvesterHandler,
 ) error {
 
-	bus.Subscribe("ScanStarted", func(msg *nats.Msg) {
+	bus.Subscribe(string(enums.ScanStartedEventSubject), func(msg *nats.Msg) {
 
 		go func(msg *nats.Msg) {
 
@@ -84,11 +74,11 @@ func SubscribeToScanStarted(
 }
 
 func SubscribeToScanCancelled(bus cmmn.EventBus) error {
-	bus.Subscribe("event.scancancelled", func(msg *nats.Msg) {
+	bus.Subscribe(string(enums.ScanCancelledEventSubject), func(msg *nats.Msg) {
 		go func(msg *nats.Msg) {
 			slog.Info("Received ScanCancelledEvent")
 			// 1. Parse the message payload
-			var payload ScanCancelledEvent
+			var payload cmmn.ScanCancelledEvent
 			if err := json.Unmarshal(msg.Data, &payload); err != nil {
 				slog.Error("Received invalid JSON payload", slog.Any("msgData", msg.Data))
 				// 1.1 Publish scan failed

@@ -53,7 +53,6 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 			if err != nil {
 				h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
 			}
-			h.logger.Info("Harvester Results", slog.Any("results", results))
 			c <- interfaces.ServiceResult{
 				ScanID:      event.ScanID,
 				ServiceName: enums.ServiceHarvester,
