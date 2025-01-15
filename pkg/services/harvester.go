@@ -156,6 +156,7 @@ func (s *HarvesterService) HarvestEmails(ctx context.Context, target string) ([]
 func (s *HarvesterService) HarvestSubdomains(ctx context.Context, target string) ([]string, error) {
 	startTime := time.Now()
 	s.Logger.Info("Harvesting subdomains", "target", target)
+
 	words, err := s.readWordList(WordListMedium)
 	if err != nil {
 		return nil, err
@@ -168,12 +169,22 @@ func (s *HarvesterService) HarvestSubdomains(ctx context.Context, target string)
 		sem        = make(chan struct{}, 5) // Semaphore for rate limiting (5 goroutines at a time)
 	)
 
+	// Start a goroutine for collecting results
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for subdomain := range results {
+			subdomains = append(subdomains, subdomain)
+		}
+	}()
+
 	// Process each word
+wordLoop:
 	for _, word := range words {
 		select {
 		case <-ctx.Done():
 			s.Logger.Warn("Subdomain harvest cancelled")
-			return subdomains, ctx.Err()
+			break wordLoop
 		default:
 			// Proceed with operation
 		}
@@ -184,16 +195,28 @@ func (s *HarvesterService) HarvestSubdomains(ctx context.Context, target string)
 			sem <- struct{}{}
 			defer func() { <-sem }() // Release semaphore
 
+			// Check for cancellation
+			select {
+			case <-ctx.Done():
+				s.Logger.Warn("Context cancelled in subdomain goroutine", "word", word)
+				return
+			default:
+				// Proceed with subdomain processing
+			}
+
 			subdomain, err := s.processSubdomain(word, target)
 			if err != nil {
 				// Subdomain does not exist
 				s.Logger.Debug("Subdomain does not exist", "word", word, "error", err)
 				return
 			}
-			if subdomain != "" {
-				results <- subdomain
-			}
 
+			// Send result to channel if not cancelled
+			select {
+			case results <- subdomain:
+			case <-ctx.Done():
+				s.Logger.Warn("Context canceled before writing result", "word", word)
+			}
 		}(word)
 	}
 
@@ -203,10 +226,7 @@ func (s *HarvesterService) HarvestSubdomains(ctx context.Context, target string)
 		close(results)
 	}()
 
-	// Collect results from channel
-	for subdomain := range results {
-		subdomains = append(subdomains, subdomain)
-	}
+	<-done
 
 	s.Logger.Info("Completed subdomain harvesting",
 		"target", target,
@@ -336,12 +356,15 @@ func (s *HarvesterService) processLinks(links []string, domain string, ctx conte
 
 func worker(jobs <-chan Job, results chan<- Result, wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
-	for job := range jobs {
+	for {
 		select {
 		case <-ctx.Done():
 			results <- Result{Emails: nil, Error: ctx.Err()}
 			return
-		default:
+		case job, ok := <-jobs:
+			if !ok {
+				return
+			}
 			emails, err := extractEmailsFromPage(job.Domain, job.Link)
 			results <- Result{Emails: emails, Error: err}
 		}

@@ -5,15 +5,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/kptm-tools/common/common/enums"
-	"github.com/kptm-tools/common/common/events"
 	cmmn "github.com/kptm-tools/common/common/events"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/nats-io/nats.go"
 )
+
+// ScanCancelledEvent represents the payload for a scan cancellation event.
+// This event signals that a specific scan has been cancelled.
+type ScanCancelledEvent struct {
+	// ScanID is the unique ideantifier of the scan
+	ScanID string `json:"scan_id"`
+
+	// Timestamp is the Unix timestamp when the scan started
+	Timestamp int64 `json:"timestamp"`
+}
+
+var scanContextMap sync.Map
 
 func SubscribeToScanStarted(
 	bus cmmn.EventBus,
@@ -42,9 +54,13 @@ func SubscribeToScanStarted(
 			}
 			log.Printf("Payload: %+v\n", payload)
 
-			// TODO: Implement context for cancellation
+			// Cancellation context
 			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			scanContextMap.Store(payload.ScanID, cancel)
+			defer func() {
+				scanContextMap.Delete(payload.ScanID)
+				cancel()
+			}()
 
 			// 2. Call our handlers for each tool
 			c := fanIn(
@@ -54,15 +70,49 @@ func SubscribeToScanStarted(
 			)
 
 			for result := range c {
-				processServiceResult(result, bus)
+				if err := processServiceResult(result, bus); err != nil {
+					slog.Error("Error processing result", slog.Any("error", err))
+				}
 			}
-			log.Printf("Finished gathering information for Scan %s!\n", payload.ScanID)
+			slog.Info("Finished gathering information", slog.String("scanID", payload.ScanID))
 		}(msg)
 
 	})
 
 	return nil
 
+}
+
+func SubscribeToScanCancelled(bus cmmn.EventBus) error {
+	bus.Subscribe("event.scancancelled", func(msg *nats.Msg) {
+		go func(msg *nats.Msg) {
+			slog.Info("Received ScanCancelledEvent")
+			// 1. Parse the message payload
+			var payload ScanCancelledEvent
+			if err := json.Unmarshal(msg.Data, &payload); err != nil {
+				slog.Error("Received invalid JSON payload", slog.Any("msgData", msg.Data))
+				// 1.1 Publish scan failed
+				msg, err := json.Marshal(map[string]string{"reason": "Invalid JSON payload", "payload": string(msg.Data)})
+				if err != nil {
+					slog.Error("Failed to marshal scan failed payload", slog.Any("error", err))
+				}
+				bus.Publish("ScanFailed", msg)
+				return
+			}
+
+			slog.Debug("Event payload", slog.Any("payload", payload))
+			slog.Info("Cancelling Scan", slog.String("scanID", payload.ScanID))
+			if cancelFunc, ok := scanContextMap.Load(payload.ScanID); ok {
+				cancelFunc.(context.CancelFunc)() // Cancel the context
+				scanContextMap.Delete(payload.ScanID)
+				slog.Info("Scan successfully cancelled", slog.String("scanID", payload.ScanID))
+			} else {
+				slog.Warn("No active scan found for ScanID", slog.String("scanID", payload.ScanID))
+			}
+		}(msg)
+
+	})
+	return nil
 }
 
 func fanIn(inputs ...<-chan interfaces.ServiceResult) <-chan interfaces.ServiceResult {
@@ -87,27 +137,26 @@ func fanIn(inputs ...<-chan interfaces.ServiceResult) <-chan interfaces.ServiceR
 	return c
 }
 
-func processServiceResult(result interfaces.ServiceResult, bus cmmn.EventBus) {
+func processServiceResult(result interfaces.ServiceResult, bus cmmn.EventBus) error {
 	// 3. When each one finishes, it must publish it's event
 	subject, err := getSubjectName(result.ServiceName)
 	if err != nil {
-		log.Printf("failed to find subject name: %v", err)
-		return
+		return fmt.Errorf("failed to find subject name: %w", err)
 	}
 	if result.Err != nil {
-		log.Printf("Error posting to %s: %v\n", subject, result.Err)
-		return
+		return fmt.Errorf("failed to post to subject %s: %w", subject, result.Err)
 	}
 
-	// TODO: Make this its own method, then wrap both methods in a publish function
-	log.Printf("Posting result to %s: %+v\n", subject, result)
+	slog.Info("Publishing service result", slog.String("subject", subject), slog.Any("result", result))
 	payload, err := buildEventPayload(result)
 	if err != nil {
-		log.Printf("failed to build event payload for subject %s: %v\n", subject, err)
-		return
+		return fmt.Errorf("failed to build event payload for subject %s: %w", subject, err)
 	}
 
-	bus.Publish(subject, payload)
+	if err := bus.Publish(subject, payload); err != nil {
+		return fmt.Errorf("failed to publish event payload to subject %s: %w", subject, err)
+	}
+	return nil
 
 }
 
@@ -153,7 +202,7 @@ func buildEventPayload(result interfaces.ServiceResult) ([]byte, error) {
 	}
 
 	switch v := eventType.(type) {
-	case events.WhoIsEvent:
+	case cmmn.WhoIsEvent:
 		evt := cmmn.WhoIsEvent{
 			BaseEvent: baseEvt,
 			Results:   result.Result,
@@ -162,7 +211,7 @@ func buildEventPayload(result interfaces.ServiceResult) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal WhoIsEvent: %w", err)
 		}
-	case events.DNSLookupEvent:
+	case cmmn.DNSLookupEvent:
 		evt := cmmn.DNSLookupEvent{
 			BaseEvent: baseEvt,
 			Results:   result.Result,
@@ -171,7 +220,7 @@ func buildEventPayload(result interfaces.ServiceResult) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal DNSLookupEvent: %w", err)
 		}
-	case events.HarvesterEvent:
+	case cmmn.HarvesterEvent:
 		evt := cmmn.HarvesterEvent{
 			BaseEvent: baseEvt,
 			Results:   result.Result,
