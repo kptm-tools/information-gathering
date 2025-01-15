@@ -7,6 +7,7 @@ require (
 	github.com/kptm-tools/common v1.2.13
 	github.com/likexian/whois v1.15.5
 	github.com/likexian/whois-parser v1.24.20
+	github.com/lmittmann/tint v1.0.6
 	github.com/miekg/dns v1.1.62
 	github.com/nats-io/nats.go v1.38.0
 	golang.org/x/net v0.33.0
