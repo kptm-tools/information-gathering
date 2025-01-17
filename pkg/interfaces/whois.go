@@ -7,7 +7,7 @@ import (
 )
 
 type IWhoIsService interface {
-	RunScan(ctx context.Context, targets []string) ([]results.TargetResult, error)
+	RunScan(ctx context.Context, targets []results.Target) ([]results.TargetResult, error)
 }
 
 type IWhoIsHandler interface {

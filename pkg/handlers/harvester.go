@@ -30,7 +30,7 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 
 	c := make(chan interfaces.ServiceResult)
 	// 1. Parse targets from event
-	targets := event.GetDomainValues()
+	targets := event.GetDomainTargets()
 
 	go func() {
 		defer close(c)

@@ -70,7 +70,7 @@ func NewHarvesterService() *HarvesterService {
 	}
 }
 
-func (s *HarvesterService) RunScan(ctx context.Context, targets []string) ([]cmmn.TargetResult, error) {
+func (s *HarvesterService) RunScan(ctx context.Context, targets []cmmn.Target) ([]cmmn.TargetResult, error) {
 	var (
 		tResults []cmmn.TargetResult
 		errs     []error
@@ -92,7 +92,7 @@ func (s *HarvesterService) RunScan(ctx context.Context, targets []string) ([]cmm
 			Results: make(map[enums.ServiceName]interface{}),
 		}
 
-		emails, err := s.HarvestEmails(ctx, target)
+		emails, err := s.HarvestEmails(ctx, target.Value)
 		if err != nil {
 			s.Logger.Error("Error harvesting emails", "target", target, "error", err)
 			errs = append(errs, err)
@@ -102,7 +102,7 @@ func (s *HarvesterService) RunScan(ctx context.Context, targets []string) ([]cmm
 			continue
 		}
 
-		subdomains, err := s.HarvestSubdomains(ctx, target)
+		subdomains, err := s.HarvestSubdomains(ctx, target.Value)
 		if err != nil {
 			s.Logger.Error("Error harvesting subdomains", "target", target, "error", err)
 			errs = append(errs, err)
@@ -130,21 +130,21 @@ func (s *HarvesterService) RunScan(ctx context.Context, targets []string) ([]cmm
 }
 
 // HarvestEmails extracts emails from a target
-func (s *HarvesterService) HarvestEmails(ctx context.Context, target string) ([]string, error) {
+func (s *HarvesterService) HarvestEmails(ctx context.Context, domain string) ([]string, error) {
 	startTime := time.Now()
-	s.Logger.Info("Harvesting emails", "target", target)
+	s.Logger.Info("Harvesting emails", "target", domain)
 
-	links, err := s.scrapeLinks(ctx, target)
+	links, err := s.scrapeLinks(ctx, domain)
 	if err != nil {
-		s.Logger.Error("Failed to scrape links", "target", target, "error", err)
+		s.Logger.Error("Failed to scrape links", "target", domain, "error", err)
 		return nil, err
 	}
 
-	allEmails := s.processLinks(links, target, ctx)
+	allEmails := s.processLinks(links, domain, ctx)
 	uniqueEmails := removeDuplicateEmails(allEmails)
 
 	s.Logger.Info("Completed email harvesting",
-		"target", target,
+		"target", domain,
 		"email_count", len(uniqueEmails),
 		"unique_emails", uniqueEmails,
 		"duration", time.Since(startTime).String(),
@@ -153,9 +153,9 @@ func (s *HarvesterService) HarvestEmails(ctx context.Context, target string) ([]
 	return uniqueEmails, nil
 }
 
-func (s *HarvesterService) HarvestSubdomains(ctx context.Context, target string) ([]string, error) {
+func (s *HarvesterService) HarvestSubdomains(ctx context.Context, domain string) ([]string, error) {
 	startTime := time.Now()
-	s.Logger.Info("Harvesting subdomains", "target", target)
+	s.Logger.Info("Harvesting subdomains", "target", domain)
 
 	words, err := s.readWordList(WordListMedium)
 	if err != nil {
@@ -204,7 +204,7 @@ wordLoop:
 				// Proceed with subdomain processing
 			}
 
-			subdomain, err := s.processSubdomain(word, target)
+			subdomain, err := s.processSubdomain(word, domain)
 			if err != nil {
 				// Subdomain does not exist
 				s.Logger.Debug("Subdomain does not exist", "word", word, "error", err)
@@ -229,7 +229,7 @@ wordLoop:
 	<-done
 
 	s.Logger.Info("Completed subdomain harvesting",
-		"target", target,
+		"target", domain,
 		"subdomain_count", len(subdomains),
 		"subdomains", subdomains,
 		"duration", time.Since(startTime).String(),
