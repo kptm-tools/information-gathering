@@ -29,7 +29,7 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
 	c := make(chan interfaces.ServiceResult)
 	// 1. Parse targets from Event (targets must be domain or IP)
-	targets := event.GetDomainValues()
+	targets := event.GetDomainTargets()
 
 	go func() {
 		defer close(c)

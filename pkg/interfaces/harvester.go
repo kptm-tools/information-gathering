@@ -8,9 +8,9 @@ import (
 )
 
 type IHarvesterService interface {
-	RunScan(ctx context.Context, targets []string) ([]results.TargetResult, error)
-	HarvestEmails(ctx context.Context, target string) ([]string, error)
-	HarvestSubdomains(ctx context.Context, target string) ([]string, error)
+	RunScan(ctx context.Context, targets []results.Target) ([]results.TargetResult, error)
+	HarvestEmails(ctx context.Context, domain string) ([]string, error)
+	HarvestSubdomains(ctx context.Context, domain string) ([]string, error)
 }
 
 type IHarvesterHandler interface {

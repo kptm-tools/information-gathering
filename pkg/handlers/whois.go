@@ -38,7 +38,7 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 			return
 		default:
 			// 1. Parse targets from StartSCAN event:
-			targets := event.GetDomainValues()
+			targets := event.GetDomainTargets()
 
 			if len(targets) == 0 {
 				c <- interfaces.ServiceResult{

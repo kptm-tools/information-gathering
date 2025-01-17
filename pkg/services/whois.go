@@ -25,7 +25,7 @@ func NewWhoIsService() *WhoIsService {
 	}
 }
 
-func (s *WhoIsService) RunScan(ctx context.Context, targets []string) ([]cmmn.TargetResult, error) {
+func (s *WhoIsService) RunScan(ctx context.Context, targets []cmmn.Target) ([]cmmn.TargetResult, error) {
 	s.Logger.Info("Running WhoIs scanner...")
 
 	var (
@@ -38,7 +38,7 @@ func (s *WhoIsService) RunScan(ctx context.Context, targets []string) ([]cmmn.Ta
 	wg.Add(len(targets))
 	for _, target := range targets {
 
-		go func(target string) {
+		go func(target cmmn.Target) {
 			defer wg.Done()
 
 			select {
@@ -49,16 +49,7 @@ func (s *WhoIsService) RunScan(ctx context.Context, targets []string) ([]cmmn.Ta
 				// Proceed with the operation
 			}
 
-			// targetDomain, err := events.ExtractDomain(target)
-			// if err != nil {
-			// 	s.Logger.Error("Error parsing domain from URL skipping to the next target.\n", "target", target, "error", err)
-			// 	mu.Lock()
-			// 	errs = append(errs, err)
-			// 	mu.Unlock()
-			// 	return
-			// }
-
-			whoIsRaw, err := whois.Whois(target)
+			whoIsRaw, err := whois.Whois(target.Value)
 			if err != nil {
 				s.Logger.Error("Error fetching WHOIS, skipping to the next target. \n", "target", target, "error", err)
 				mu.Lock()

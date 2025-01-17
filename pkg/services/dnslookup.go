@@ -27,7 +27,7 @@ func NewDNSLookupService() *DNSLookupService {
 	}
 }
 
-func (s *DNSLookupService) RunScan(ctx context.Context, targets []string) ([]cmmn.TargetResult, error) {
+func (s *DNSLookupService) RunScan(ctx context.Context, targets []cmmn.Target) ([]cmmn.TargetResult, error) {
 
 	var (
 		targetResults []cmmn.TargetResult
@@ -38,7 +38,7 @@ func (s *DNSLookupService) RunScan(ctx context.Context, targets []string) ([]cmm
 
 	wg.Add(len(targets))
 	for _, target := range targets {
-		if !isValidDomain(target) {
+		if !isValidDomain(target.Value) {
 			s.Logger.Error("Not a valid domain", "domain", target)
 			continue
 		}
@@ -55,7 +55,7 @@ func (s *DNSLookupService) RunScan(ctx context.Context, targets []string) ([]cmm
 				// Proceed with the operation
 			}
 
-			result, err := performDNSLookup(ctx, target)
+			result, err := performDNSLookup(ctx, target.Value)
 			if err != nil {
 				s.Logger.Error("Error performing DNSLookup for target ", "target", target, "error", err)
 				mu.Lock()
@@ -65,14 +65,14 @@ func (s *DNSLookupService) RunScan(ctx context.Context, targets []string) ([]cmm
 			}
 
 			tResult := cmmn.TargetResult{
-				Target:  domain,
+				Target:  target,
 				Results: map[enums.ServiceName]interface{}{enums.ServiceHarvester: result},
 			}
 
 			mu.Lock()
 			targetResults = append(targetResults, tResult)
 			mu.Unlock()
-		}(target)
+		}(target.Value)
 	}
 	wg.Wait()
 
