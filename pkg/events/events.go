@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/kptm-tools/common/common/enums"
 	cmmn "github.com/kptm-tools/common/common/events"
@@ -146,7 +145,7 @@ func processServiceResult(result results.ServiceResult, bus cmmn.EventBus) error
 		return fmt.Errorf("failed to find subject name: %w", err)
 	}
 	if result.Err != nil {
-		return fmt.Errorf("failed to post to subject %s: %w", subject, result.Err)
+		slog.Warn("Posting to subject with errors", slog.String("subject", subject), slog.Any("err", result.Err))
 	}
 
 	slog.Info("Publishing service result", slog.String("subject", subject), slog.Any("result", result))
@@ -178,63 +177,11 @@ func getSubjectName(serviceName enums.ServiceName) (string, error) {
 }
 
 func buildEventPayload(result results.ServiceResult) ([]byte, error) {
-	var (
-		msg []byte
-		err error
-	)
-	timestamp := time.Now().Unix()
-	eventType, exists := cmmn.ServiceEventMap[result.ServiceName]
+	// Get the correct factory from registry
+	factory, exists := cmmn.EventFactoryRegistry[result.ServiceName]
 	if !exists {
-		return nil, fmt.Errorf("invalid service: %s", result.ServiceName)
+		return nil, fmt.Errorf("unknown service: %s", result.ServiceName)
 	}
 
-	// Handle the error attribute safely
-	var eventError *cmmn.EventError
-	if result.Err != nil {
-		eventError = &cmmn.EventError{
-			Code:    enums.ServiceError,
-			Message: result.Err.Error(),
-		}
-	}
-
-	baseEvt := cmmn.BaseEvent{
-		ScanID:    result.ScanID,
-		Error:     eventError,
-		Timestamp: timestamp,
-	}
-
-	switch v := eventType.(type) {
-	case cmmn.WhoIsEvent:
-		evt := cmmn.WhoIsEvent{
-			BaseEvent: baseEvt,
-			Results:   result.Result,
-		}
-		msg, err = json.Marshal(evt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal WhoIsEvent: %w", err)
-		}
-	case cmmn.DNSLookupEvent:
-		evt := cmmn.DNSLookupEvent{
-			BaseEvent: baseEvt,
-			Results:   result.Result,
-		}
-		msg, err = json.Marshal(evt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal DNSLookupEvent: %w", err)
-		}
-	case cmmn.HarvesterEvent:
-		evt := cmmn.HarvesterEvent{
-			BaseEvent: baseEvt,
-			Results:   result.Result,
-		}
-		msg, err = json.Marshal(evt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal HarvesterEvent: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("unknown event type: %T", v)
-	}
-
-	return msg, nil
-
+	return factory.BuildEvent(result)
 }
