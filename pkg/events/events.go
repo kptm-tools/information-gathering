@@ -10,6 +10,7 @@ import (
 
 	"github.com/kptm-tools/common/common/enums"
 	cmmn "github.com/kptm-tools/common/common/events"
+	"github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/nats-io/nats.go"
 )
@@ -116,13 +117,13 @@ func SubscribeToScanCancelled(bus cmmn.EventBus) error {
 	return nil
 }
 
-func fanIn(inputs ...<-chan interfaces.ServiceResult) <-chan interfaces.ServiceResult {
-	c := make(chan interfaces.ServiceResult)
+func fanIn(inputs ...<-chan results.ServiceResult) <-chan results.ServiceResult {
+	c := make(chan results.ServiceResult)
 	var wg sync.WaitGroup
 
 	for _, input := range inputs {
 		wg.Add(1)
-		go func(ch <-chan interfaces.ServiceResult) {
+		go func(ch <-chan results.ServiceResult) {
 			defer wg.Done()
 			for result := range ch {
 				c <- result
@@ -138,7 +139,7 @@ func fanIn(inputs ...<-chan interfaces.ServiceResult) <-chan interfaces.ServiceR
 	return c
 }
 
-func processServiceResult(result interfaces.ServiceResult, bus cmmn.EventBus) error {
+func processServiceResult(result results.ServiceResult, bus cmmn.EventBus) error {
 	// 3. When each one finishes, it must publish it's event
 	subject, err := getSubjectName(result.ServiceName)
 	if err != nil {
@@ -176,7 +177,7 @@ func getSubjectName(serviceName enums.ServiceName) (string, error) {
 
 }
 
-func buildEventPayload(result interfaces.ServiceResult) ([]byte, error) {
+func buildEventPayload(result results.ServiceResult) ([]byte, error) {
 	var (
 		msg []byte
 		err error

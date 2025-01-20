@@ -26,9 +26,9 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 	}
 }
 
-func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
+func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ServiceResult {
 
-	c := make(chan interfaces.ServiceResult)
+	c := make(chan cmmn.ServiceResult)
 	// 1. Parse targets from event
 	targets := event.GetDomainTargets()
 
@@ -41,7 +41,7 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 			return
 		default:
 			if len(targets) == 0 {
-				c <- interfaces.ServiceResult{
+				c <- cmmn.ServiceResult{
 					ScanID:      event.ScanID,
 					ServiceName: enums.ServiceHarvester,
 					Result:      []cmmn.TargetResult{},
@@ -53,7 +53,7 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 			if err != nil {
 				h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
 			}
-			c <- interfaces.ServiceResult{
+			c <- cmmn.ServiceResult{
 				ScanID:      event.ScanID,
 				ServiceName: enums.ServiceHarvester,
 				Result:      results,
