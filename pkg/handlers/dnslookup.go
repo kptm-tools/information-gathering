@@ -26,8 +26,8 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 	}
 }
 
-func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
-	c := make(chan interfaces.ServiceResult)
+func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ServiceResult {
+	c := make(chan cmmn.ServiceResult)
 	// 1. Parse targets from Event (targets must be domain or IP)
 	targets := event.GetDomainTargets()
 
@@ -40,7 +40,7 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 			return
 		default:
 			if len(targets) == 0 {
-				c <- interfaces.ServiceResult{
+				c <- cmmn.ServiceResult{
 					ScanID:      event.ScanID,
 					ServiceName: enums.ServiceDNSLookup,
 					Result:      []cmmn.TargetResult{},
@@ -55,7 +55,7 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 			}
 
 			h.logger.Debug("DNSLookup Results", slog.Any("results", results))
-			c <- interfaces.ServiceResult{
+			c <- cmmn.ServiceResult{
 				ScanID:      event.ScanID,
 				ServiceName: enums.ServiceDNSLookup,
 				Result:      results,

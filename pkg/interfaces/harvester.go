@@ -14,5 +14,5 @@ type IHarvesterService interface {
 }
 
 type IHarvesterHandler interface {
-	RunScan(context.Context, events.ScanStartedEvent) <-chan ServiceResult
+	RunScan(context.Context, events.ScanStartedEvent) <-chan results.ServiceResult
 }
