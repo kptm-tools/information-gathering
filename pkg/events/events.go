@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"sync"
 	"time"
@@ -28,21 +27,25 @@ func SubscribeToScanStarted(
 
 		go func(msg *nats.Msg) {
 
-			log.Printf("Received ScanStarted Event\n")
+			slog.Info("Received ScanStarted Event\n")
 			// 1. Parse the message payload
 			var payload cmmn.ScanStartedEvent
 
 			if err := json.Unmarshal(msg.Data, &payload); err != nil {
-				log.Printf("Received invalid JSON payload: %s\n", msg.Data)
+				slog.Error("Received invalid JSON payload",
+					slog.String("payload", string(msg.Data)),
+					slog.Any("error", err))
 				// 1.1 Publish scan failed
-				msg, err := json.Marshal(map[string]string{"reason": "Invalid JSON payload", "payload": string(msg.Data)})
+				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ParsingError, err.Error())
+				msg, err := json.Marshal(failedPayload)
 				if err != nil {
-					log.Printf("failed to marshal scan failed payload: %v", err)
+					slog.Error("failed to marshal scan failed payload", slog.Any("error", err))
+					return
 				}
-				bus.Publish("ScanFailed", msg)
+				bus.Publish(string(enums.ScanFailedEventSubject), msg)
 				return
 			}
-			log.Printf("Payload: %+v\n", payload)
+			slog.Debug("Parsed payload", slog.Any("payload", payload))
 
 			// Cancellation context
 			ctx, cancel := context.WithCancel(context.Background())
@@ -60,8 +63,15 @@ func SubscribeToScanStarted(
 			)
 
 			for result := range c {
+				// Publish scan failed if there was an error processing service result
 				if err := processServiceResult(result, bus); err != nil {
 					slog.Error("Error processing result", slog.Any("error", err))
+					failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ServiceError, err.Error())
+					msg, err := json.Marshal(failedPayload)
+					if err != nil {
+						slog.Error("failed to marshal scan failed payload", slog.Any("error", err))
+					}
+					bus.Publish(string(enums.ScanFailedEventSubject), msg)
 				}
 			}
 			slog.Info("Finished gathering information", slog.String("scanID", payload.ScanID))
@@ -82,11 +92,12 @@ func SubscribeToScanCancelled(bus cmmn.EventBus) error {
 			if err := json.Unmarshal(msg.Data, &payload); err != nil {
 				slog.Error("Received invalid JSON payload", slog.Any("msgData", msg.Data))
 				// 1.1 Publish scan failed
-				msg, err := json.Marshal(map[string]string{"reason": "Invalid JSON payload", "payload": string(msg.Data)})
+				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ServiceError, fmt.Errorf("Invalid JSON payload: %w", err).Error())
+				msg, err := json.Marshal(failedPayload)
 				if err != nil {
 					slog.Error("Failed to marshal scan failed payload", slog.Any("error", err))
 				}
-				bus.Publish("ScanFailed", msg)
+				bus.Publish(string(enums.ScanFailedEventSubject), msg)
 				return
 			}
 
@@ -180,7 +191,7 @@ func buildEventPayload(result interfaces.ServiceResult) ([]byte, error) {
 	var eventError *cmmn.EventError
 	if result.Err != nil {
 		eventError = &cmmn.EventError{
-			Code:    result.Err.Error(),
+			Code:    enums.ServiceError,
 			Message: result.Err.Error(),
 		}
 	}
