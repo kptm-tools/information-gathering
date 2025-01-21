@@ -12,5 +12,5 @@ type IDNSLookupService interface {
 }
 
 type IDNSLookupHandler interface {
-	RunScan(context.Context, events.ScanStartedEvent) <-chan ServiceResult
+	RunScan(context.Context, events.ScanStartedEvent) <-chan results.ServiceResult
 }

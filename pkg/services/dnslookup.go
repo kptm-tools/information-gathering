@@ -66,7 +66,7 @@ func (s *DNSLookupService) RunScan(ctx context.Context, targets []cmmn.Target) (
 
 			tResult := cmmn.TargetResult{
 				Target:  target,
-				Results: map[enums.ServiceName]interface{}{enums.ServiceHarvester: result},
+				Results: map[enums.ServiceName]interface{}{enums.ServiceDNSLookup: result},
 			}
 
 			mu.Lock()

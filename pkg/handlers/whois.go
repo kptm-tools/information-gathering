@@ -26,8 +26,8 @@ func NewWhoIsHandler(whoIsService interfaces.IWhoIsService) *WhoIsHandler {
 	}
 }
 
-func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan interfaces.ServiceResult {
-	c := make(chan interfaces.ServiceResult)
+func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ServiceResult {
+	c := make(chan cmmn.ServiceResult)
 
 	go func() {
 		defer close(c)
@@ -41,7 +41,7 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 			targets := event.GetDomainTargets()
 
 			if len(targets) == 0 {
-				c <- interfaces.ServiceResult{
+				c <- cmmn.ServiceResult{
 					ScanID:      event.ScanID,
 					ServiceName: enums.ServiceWhoIs,
 					Result:      []cmmn.TargetResult{},
@@ -55,7 +55,7 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 			}
 
 			h.logger.Info("WhoIs Results", slog.Any("results", results))
-			c <- interfaces.ServiceResult{
+			c <- cmmn.ServiceResult{
 				ScanID:      event.ScanID,
 				ServiceName: enums.ServiceWhoIs,
 				Result:      results,
