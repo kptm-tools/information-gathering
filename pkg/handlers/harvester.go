@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/kptm-tools/common/common/enums"
 	"github.com/kptm-tools/common/common/events"
@@ -26,11 +27,10 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 	}
 }
 
-func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ServiceResult {
+func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ToolResult {
 
-	c := make(chan cmmn.ServiceResult)
+	c := make(chan cmmn.ToolResult)
 	// 1. Parse targets from event
-	targets := event.GetDomainTargets()
 
 	go func() {
 		defer close(c)
@@ -40,25 +40,20 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 			h.logger.Info("WhoIsHandler: Scan cancelled", slog.Any("scanID", event.ScanID))
 			return
 		default:
-			if len(targets) == 0 {
-				c <- cmmn.ServiceResult{
-					ScanID:      event.ScanID,
-					ServiceName: enums.ServiceHarvester,
-					Result:      []cmmn.TargetResult{},
-					Err:         fmt.Errorf("no valid targets"),
+			if !event.HasDomainTarget() {
+				c <- cmmn.ToolResult{
+					Tool:      enums.ToolHarvester,
+					Success:   false,
+					Err:       fmt.Errorf("no valid targets"),
+					Timestamp: time.Now().Unix(),
 				}
 			}
 
-			results, err := h.harvesterService.RunScan(ctx, targets)
+			result, err := h.harvesterService.RunScan(ctx, event.Target)
 			if err != nil {
 				h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
 			}
-			c <- cmmn.ServiceResult{
-				ScanID:      event.ScanID,
-				ServiceName: enums.ServiceHarvester,
-				Result:      results,
-				Err:         err,
-			}
+			c <- result
 		}
 
 	}()

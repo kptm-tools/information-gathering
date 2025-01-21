@@ -2,9 +2,8 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"sync"
+	"time"
 
 	"github.com/kptm-tools/common/common/enums"
 	cmmn "github.com/kptm-tools/common/common/results"
@@ -25,63 +24,33 @@ func NewWhoIsService() *WhoIsService {
 	}
 }
 
-func (s *WhoIsService) RunScan(ctx context.Context, targets []cmmn.Target) ([]cmmn.TargetResult, error) {
+func (s *WhoIsService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.ToolResult, error) {
 	s.Logger.Info("Running WhoIs scanner...")
 
-	var (
-		tResults []cmmn.TargetResult
-		errs     []error
-		mu       sync.Mutex
-		wg       sync.WaitGroup
-	)
-
-	wg.Add(len(targets))
-	for _, target := range targets {
-
-		go func(target cmmn.Target) {
-			defer wg.Done()
-
-			select {
-			case <-ctx.Done():
-				s.Logger.Warn("Context cancelled during WhoIs search", "target", target)
-				return
-			default:
-				// Proceed with the operation
-			}
-
-			whoIsRaw, err := whois.Whois(target.Value)
-			if err != nil {
-				s.Logger.Error("Error fetching WHOIS, skipping to the next target. \n", "target", target, "error", err)
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-				return
-			}
-
-			parsedResult, err := whoisparser.Parse(whoIsRaw)
-			if err != nil {
-				s.Logger.Error("Error parsing WHOIS data, skipping to the next target. \n", "target", target, "error", err)
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-				return
-			}
-
-			mu.Lock()
-			tRes := cmmn.TargetResult{
-				Target:  target,
-				Results: map[enums.ServiceName]interface{}{enums.ServiceWhoIs: parsedResult},
-			}
-			tResults = append(tResults, tRes)
-			mu.Unlock()
-		}(target)
+	select {
+	case <-ctx.Done():
+		s.Logger.Warn("Context cancelled during WhoIs search", "target", target)
+		return cmmn.ToolResult{}, ctx.Err()
+	default:
+		// Proceed with the operation
 	}
 
-	wg.Wait()
-
-	if len(errs) > 0 {
-		return tResults, fmt.Errorf("completed with errors: %v", errs)
+	whoIsRaw, err := whois.Whois(target.Value)
+	if err != nil {
+		s.Logger.Error("Error fetching WHOIS", "target", target, "error", err)
+		return cmmn.ToolResult{}, err
 	}
 
-	return tResults, nil
+	parsedResult, err := whoisparser.Parse(whoIsRaw)
+	if err != nil {
+		s.Logger.Error("Error parsing WHOIS data", "target", target, "error", err)
+		return cmmn.ToolResult{}, err
+	}
+
+	return cmmn.ToolResult{
+		Tool:      enums.ToolWhoIs,
+		Success:   true,
+		Result:    parsedResult,
+		Timestamp: time.Now().Unix(),
+	}, nil
 }
