@@ -70,63 +70,55 @@ func NewHarvesterService() *HarvesterService {
 	}
 }
 
-func (s *HarvesterService) RunScan(ctx context.Context, targets []cmmn.Target) ([]cmmn.TargetResult, error) {
-	var (
-		tResults []cmmn.TargetResult
-		errs     []error
-	)
+func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.ToolResult, error) {
 
 	// To avoid rate-limiting, we don't use coroutines here
-	for _, target := range targets {
 
-		select {
-		case <-ctx.Done():
-			s.Logger.Warn("Context canceled during Harvester search", "target", target)
-			return tResults, ctx.Err()
-		default:
-			// Proceed with operation
-		}
+	select {
+	case <-ctx.Done():
+		s.Logger.Warn("Context canceled during Harvester search", "target", target)
+		return cmmn.ToolResult{}, ctx.Err()
+	default:
+		// Proceed with operation
+	}
 
-		tRes := cmmn.TargetResult{
-			Target:  target,
-			Results: make(map[enums.ServiceName]interface{}),
-		}
+	emails, err := s.HarvestEmails(ctx, target.Value)
+	if err != nil {
+		s.Logger.Error("Error harvesting emails", "target", target, "error", err)
+		return cmmn.ToolResult{
+			Tool: enums.ToolHarvester,
+			Err: &cmmn.ToolError{
+				Code:    enums.ToolError,
+				Message: fmt.Sprintf("error harvesting emails: %s", err.Error()),
+			},
+			Timestamp: time.Now().Unix(),
+		}, nil
+	}
 
-		emails, err := s.HarvestEmails(ctx, target.Value)
-		if err != nil {
-			s.Logger.Error("Error harvesting emails", "target", target, "error", err)
-			errs = append(errs, err)
-			tRes.Results[enums.ServiceHarvester] = cmmn.HarvesterResult{
-				Error: err.Error(),
-			}
-			continue
-		}
+	subdomains, err := s.HarvestSubdomains(ctx, target.Value)
+	if err != nil {
+		s.Logger.Error("Error harvesting subdomains", "target", target, "error", err)
+		return cmmn.ToolResult{
+			Tool: enums.ToolHarvester,
+			Err: &cmmn.ToolError{
+				Code:    enums.ToolError,
+				Message: fmt.Sprintf("error harvesting subdomains: %s", err.Error()),
+			},
+			Result: cmmn.HarvesterResult{
+				Emails: emails,
+			},
+			Timestamp: time.Now().Unix(),
+		}, nil
+	}
 
-		subdomains, err := s.HarvestSubdomains(ctx, target.Value)
-		if err != nil {
-			s.Logger.Error("Error harvesting subdomains", "target", target, "error", err)
-			errs = append(errs, err)
-			tRes.Results[enums.ServiceHarvester] = cmmn.HarvesterResult{
-				Error: err.Error(),
-			}
-			tResults = append(tResults, tRes)
-			continue
-		}
-
-		tRes.Results[enums.ServiceHarvester] = cmmn.HarvesterResult{
+	return cmmn.ToolResult{
+		Tool: enums.ToolHarvester,
+		Result: cmmn.HarvesterResult{
 			Emails:     emails,
 			Subdomains: subdomains,
-			Error:      "",
-		}
-
-		tResults = append(tResults, tRes)
-	}
-
-	if len(errs) > 0 {
-		s.Logger.Warn("Some targets failed during the scan", "failed_targets", len(errs))
-	}
-
-	return tResults, nil
+		},
+		Timestamp: time.Now().Unix(),
+	}, nil
 }
 
 // HarvestEmails extracts emails from a target

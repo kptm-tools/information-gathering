@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/kptm-tools/common/common/enums"
 	"github.com/kptm-tools/common/common/events"
@@ -26,10 +27,8 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 	}
 }
 
-func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ServiceResult {
-	c := make(chan cmmn.ServiceResult)
-	// 1. Parse targets from Event (targets must be domain or IP)
-	targets := event.GetDomainTargets()
+func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ToolResult {
+	c := make(chan cmmn.ToolResult)
 
 	go func() {
 		defer close(c)
@@ -39,28 +38,33 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 			h.logger.Info("DNSLookupHandler: scan cancelled", slog.Any("scanID", event.ScanID))
 			return
 		default:
-			if len(targets) == 0 {
-				c <- cmmn.ServiceResult{
-					ScanID:      event.ScanID,
-					ServiceName: enums.ServiceDNSLookup,
-					Result:      []cmmn.TargetResult{},
-					Err:         fmt.Errorf("no valid targets"),
+			if !event.HasDomainTarget() {
+				c <- cmmn.ToolResult{
+					Tool: enums.ToolDNSLookup,
+					Err: &cmmn.ToolError{
+						Code:    enums.ValidationError,
+						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
+					},
+					Timestamp: time.Now().Unix(),
 				}
 				return
 			}
 
-			results, err := h.dnsLookupService.RunScan(ctx, targets)
+			result, err := h.dnsLookupService.RunScan(ctx, event.Target)
 			if err != nil {
 				h.logger.Error("error running DNS handler scan", slog.Any("error", err))
+				c <- cmmn.ToolResult{
+					Tool: enums.ToolDNSLookup,
+					Err: &cmmn.ToolError{
+						Code:    enums.ToolError,
+						Message: fmt.Sprintf("error running DNS handler: %s", err.Error()),
+					},
+				}
+				return
 			}
 
-			h.logger.Debug("DNSLookup Results", slog.Any("results", results))
-			c <- cmmn.ServiceResult{
-				ScanID:      event.ScanID,
-				ServiceName: enums.ServiceDNSLookup,
-				Result:      results,
-				Err:         err,
-			}
+			h.logger.Debug("DNSLookup Results", slog.Any("results", result))
+			c <- result
 		}
 	}()
 

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/kptm-tools/common/common/enums"
@@ -27,72 +25,54 @@ func NewDNSLookupService() *DNSLookupService {
 	}
 }
 
-func (s *DNSLookupService) RunScan(ctx context.Context, targets []cmmn.Target) ([]cmmn.TargetResult, error) {
+func (s *DNSLookupService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.ToolResult, error) {
 
-	var (
-		targetResults []cmmn.TargetResult
-		errs          []error
-		mu            sync.Mutex
-		wg            sync.WaitGroup
-	)
-
-	wg.Add(len(targets))
-	for _, target := range targets {
-		if !isValidDomain(target.Value) {
-			s.Logger.Error("Not a valid domain", "domain", target)
-			continue
-		}
-
-		go func(domain string) {
-			defer wg.Done()
-
-			// Check for context cancellation
-			select {
-			case <-ctx.Done():
-				s.Logger.Warn("Context canceled during DNS lookup", "domain", domain)
-				return
-			default:
-				// Proceed with the operation
-			}
-
-			result, err := performDNSLookup(ctx, target.Value)
-			if err != nil {
-				s.Logger.Error("Error performing DNSLookup for target ", "target", target, "error", err)
-				mu.Lock()
-				errs = append(errs, err...)
-				mu.Unlock()
-				return
-			}
-
-			tResult := cmmn.TargetResult{
-				Target:  target,
-				Results: map[enums.ServiceName]interface{}{enums.ServiceDNSLookup: result},
-			}
-
-			mu.Lock()
-			targetResults = append(targetResults, tResult)
-			mu.Unlock()
-		}(target.Value)
-	}
-	wg.Wait()
-
-	if len(errs) > 0 {
-		var formattedErrors []string
-		for _, e := range errs {
-			formattedErrors = append(formattedErrors, e.Error())
-		}
-		return targetResults, fmt.Errorf("completed with errors:\n%s", strings.Join(formattedErrors, "\n"))
+	if !isValidDomain(target.Value) {
+		s.Logger.Error("Not a valid domain", "domain", target)
+		return cmmn.ToolResult{
+			Tool: enums.ToolDNSLookup,
+			Err: &cmmn.ToolError{
+				Code:    enums.ValidationError,
+				Message: fmt.Sprintf("invalid domain: %s", target.Value),
+			},
+			Timestamp: time.Now().Unix(),
+		}, nil
 	}
 
-	return targetResults, nil
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		s.Logger.Warn("Context canceled during DNS lookup", "domain", target.Value)
+		return cmmn.ToolResult{}, ctx.Err()
+	default:
+		// Proceed with the operation
+	}
+
+	result, err := performDNSLookup(ctx, target.Value)
+	if err != nil {
+		s.Logger.Error("Error performing DNSLookup for target ", "target", target, "error", err)
+		return cmmn.ToolResult{
+			Tool: enums.ToolDNSLookup,
+
+			Err: &cmmn.ToolError{
+				Code:    enums.ToolError,
+				Message: fmt.Errorf("error performing DNSLookup %w", err).Error(),
+			},
+			Timestamp: time.Now().Unix(),
+		}, nil
+	}
+	return cmmn.ToolResult{
+		Tool:      enums.ToolDNSLookup,
+		Result:    result,
+		Timestamp: time.Now().Unix(),
+	}, nil
 }
 
-func performDNSLookup(ctx context.Context, domain string) (*cmmn.DNSLookupResult, []error) {
+func performDNSLookup(ctx context.Context, domain string) (cmmn.DNSLookupResult, error) {
 
 	var (
 		records       []cmmn.DNSRecord
 		DNSSECEnabled bool
-		errs          []error
 	)
 	start := time.Now()
 	wantRecords := []uint16{
@@ -111,16 +91,14 @@ func performDNSLookup(ctx context.Context, domain string) (*cmmn.DNSLookupResult
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
-			errs = append(errs, fmt.Errorf("context canceled during lookup for domain: %s", domain))
-			return nil, errs
+			return cmmn.DNSLookupResult{}, ctx.Err()
 		default:
 			// Proceed with DNS query
 		}
 
 		typeRecords, err := QueryDNSRecord(domain, recordType)
 		if err != nil {
-			errs = append(errs, err)
-			continue
+			return cmmn.DNSLookupResult{}, err
 		}
 		records = append(records, typeRecords...)
 	}
@@ -132,13 +110,13 @@ func performDNSLookup(ctx context.Context, domain string) (*cmmn.DNSLookupResult
 
 	duration := time.Since(start)
 
-	return &cmmn.DNSLookupResult{
+	return cmmn.DNSLookupResult{
 		Domain:         domain,
 		DNSRecords:     records,
 		DNSSECEnabled:  DNSSECEnabled,
 		LookupDuration: duration,
 		CreatedAt:      time.Now(),
-	}, errs
+	}, nil
 
 }
 

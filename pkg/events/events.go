@@ -36,7 +36,7 @@ func SubscribeToScanStarted(
 					slog.String("payload", string(msg.Data)),
 					slog.Any("error", err))
 				// 1.1 Publish scan failed
-				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ParsingError, err.Error())
+				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, fmt.Errorf("invalid JSON payload: %w", err).Error())
 				msg, err := json.Marshal(failedPayload)
 				if err != nil {
 					slog.Error("failed to marshal scan failed payload", slog.Any("error", err))
@@ -64,9 +64,9 @@ func SubscribeToScanStarted(
 
 			for result := range c {
 				// Publish scan failed if there was an error processing service result
-				if err := processServiceResult(result, bus); err != nil {
+				if err := processServiceResult(payload.ScanID, result, bus); err != nil {
 					slog.Error("Error processing result", slog.Any("error", err))
-					failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ServiceError, err.Error())
+					failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, fmt.Errorf("error processing result: %w", err).Error())
 					msg, err := json.Marshal(failedPayload)
 					if err != nil {
 						slog.Error("failed to marshal scan failed payload", slog.Any("error", err))
@@ -92,7 +92,7 @@ func SubscribeToScanCancelled(bus cmmn.EventBus) error {
 			if err := json.Unmarshal(msg.Data, &payload); err != nil {
 				slog.Error("Received invalid JSON payload", slog.Any("msgData", msg.Data))
 				// 1.1 Publish scan failed
-				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ServiceError, fmt.Errorf("Invalid JSON payload: %w", err).Error())
+				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, fmt.Errorf("invalid JSON payload: %w", err).Error())
 				msg, err := json.Marshal(failedPayload)
 				if err != nil {
 					slog.Error("Failed to marshal scan failed payload", slog.Any("error", err))
@@ -116,13 +116,13 @@ func SubscribeToScanCancelled(bus cmmn.EventBus) error {
 	return nil
 }
 
-func fanIn(inputs ...<-chan results.ServiceResult) <-chan results.ServiceResult {
-	c := make(chan results.ServiceResult)
+func fanIn(inputs ...<-chan results.ToolResult) <-chan results.ToolResult {
+	c := make(chan results.ToolResult)
 	var wg sync.WaitGroup
 
 	for _, input := range inputs {
 		wg.Add(1)
-		go func(ch <-chan results.ServiceResult) {
+		go func(ch <-chan results.ToolResult) {
 			defer wg.Done()
 			for result := range ch {
 				c <- result
@@ -138,9 +138,9 @@ func fanIn(inputs ...<-chan results.ServiceResult) <-chan results.ServiceResult 
 	return c
 }
 
-func processServiceResult(result results.ServiceResult, bus cmmn.EventBus) error {
+func processServiceResult(scanID string, result results.ToolResult, bus cmmn.EventBus) error {
 	// 3. When each one finishes, it must publish it's event
-	subject, err := getSubjectName(result.ServiceName)
+	subject, err := enums.GetToolSubjectName(result.Tool)
 	if err != nil {
 		return fmt.Errorf("failed to find subject name: %w", err)
 	}
@@ -149,7 +149,8 @@ func processServiceResult(result results.ServiceResult, bus cmmn.EventBus) error
 	}
 
 	slog.Info("Publishing service result", slog.String("subject", subject), slog.Any("result", result))
-	payload, err := buildEventPayload(result)
+	factory := cmmn.ToolEventFactory{}
+	payload, err := factory.BuildEvent(scanID, result)
 	if err != nil {
 		return fmt.Errorf("failed to build event payload for subject %s: %w", subject, err)
 	}
@@ -159,29 +160,4 @@ func processServiceResult(result results.ServiceResult, bus cmmn.EventBus) error
 	}
 	return nil
 
-}
-
-func getSubjectName(serviceName enums.ServiceName) (string, error) {
-	subjectNameMap := map[enums.ServiceName]enums.EventSubjectName{
-		enums.ServiceWhoIs:     enums.WhoIsEventSubject,
-		enums.ServiceDNSLookup: enums.DNSLookupEventSubject,
-		enums.ServiceHarvester: enums.HarvesterEventSubject,
-	}
-
-	subject, exists := subjectNameMap[serviceName]
-	if !exists {
-		return "", fmt.Errorf("invalid service: %s", serviceName)
-	}
-	return string(subject), nil
-
-}
-
-func buildEventPayload(result results.ServiceResult) ([]byte, error) {
-	// Get the correct factory from registry
-	factory, exists := cmmn.EventFactoryRegistry[result.ServiceName]
-	if !exists {
-		return nil, fmt.Errorf("unknown service: %s", result.ServiceName)
-	}
-
-	return factory.BuildEvent(result)
 }

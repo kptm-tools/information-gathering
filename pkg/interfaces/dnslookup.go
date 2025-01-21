@@ -8,9 +8,9 @@ import (
 )
 
 type IDNSLookupService interface {
-	RunScan(ctx context.Context, targets []results.Target) ([]results.TargetResult, error)
+	RunScan(ctx context.Context, target results.Target) (results.ToolResult, error)
 }
 
 type IDNSLookupHandler interface {
-	RunScan(context.Context, events.ScanStartedEvent) <-chan results.ServiceResult
+	RunScan(context.Context, events.ScanStartedEvent) <-chan results.ToolResult
 }
