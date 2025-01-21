@@ -36,7 +36,7 @@ func SubscribeToScanStarted(
 					slog.String("payload", string(msg.Data)),
 					slog.Any("error", err))
 				// 1.1 Publish scan failed
-				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ParsingError, err.Error())
+				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, fmt.Errorf("Invalid JSON payload: %w", err).Error())
 				msg, err := json.Marshal(failedPayload)
 				if err != nil {
 					slog.Error("failed to marshal scan failed payload", slog.Any("error", err))
@@ -66,7 +66,7 @@ func SubscribeToScanStarted(
 				// Publish scan failed if there was an error processing service result
 				if err := processServiceResult(payload.ScanID, result, bus); err != nil {
 					slog.Error("Error processing result", slog.Any("error", err))
-					failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ToolError, err.Error())
+					failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, fmt.Errorf("error processing result: %w", err).Error())
 					msg, err := json.Marshal(failedPayload)
 					if err != nil {
 						slog.Error("failed to marshal scan failed payload", slog.Any("error", err))
@@ -92,7 +92,7 @@ func SubscribeToScanCancelled(bus cmmn.EventBus) error {
 			if err := json.Unmarshal(msg.Data, &payload); err != nil {
 				slog.Error("Received invalid JSON payload", slog.Any("msgData", msg.Data))
 				// 1.1 Publish scan failed
-				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, enums.ParsingError, fmt.Errorf("Invalid JSON payload: %w", err).Error())
+				failedPayload := cmmn.NewScanFailedEvent(payload.ScanID, fmt.Errorf("Invalid JSON payload: %w", err).Error())
 				msg, err := json.Marshal(failedPayload)
 				if err != nil {
 					slog.Error("Failed to marshal scan failed payload", slog.Any("error", err))
@@ -150,7 +150,7 @@ func processServiceResult(scanID string, result results.ToolResult, bus cmmn.Eve
 
 	slog.Info("Publishing service result", slog.String("subject", subject), slog.Any("result", result))
 	factory := cmmn.ToolEventFactory{}
-	payload, err := factory.BuildEvent(scanID, result, nil)
+	payload, err := factory.BuildEvent(scanID, result)
 	if err != nil {
 		return fmt.Errorf("failed to build event payload for subject %s: %w", subject, err)
 	}

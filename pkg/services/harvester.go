@@ -86,9 +86,11 @@ func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 	if err != nil {
 		s.Logger.Error("Error harvesting emails", "target", target, "error", err)
 		return cmmn.ToolResult{
-			Tool:      enums.ToolHarvester,
-			Success:   false,
-			Err:       fmt.Errorf("error harvesting emails: %w", err),
+			Tool: enums.ToolHarvester,
+			Err: &cmmn.ToolError{
+				Code:    enums.ToolError,
+				Message: fmt.Sprintf("error harvesting emails: %s", err.Error()),
+			},
 			Timestamp: time.Now().Unix(),
 		}, nil
 	}
@@ -97,9 +99,11 @@ func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 	if err != nil {
 		s.Logger.Error("Error harvesting subdomains", "target", target, "error", err)
 		return cmmn.ToolResult{
-			Tool:    enums.ToolHarvester,
-			Success: false,
-			Err:     fmt.Errorf("error harvesting subdomains: %w", err),
+			Tool: enums.ToolHarvester,
+			Err: &cmmn.ToolError{
+				Code:    enums.ToolError,
+				Message: fmt.Sprintf("error harvesting subdomains: %s", err.Error()),
+			},
 			Result: cmmn.HarvesterResult{
 				Emails: emails,
 			},
@@ -108,8 +112,7 @@ func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 	}
 
 	return cmmn.ToolResult{
-		Tool:    enums.ToolHarvester,
-		Success: true,
+		Tool: enums.ToolHarvester,
 		Result: cmmn.HarvesterResult{
 			Emails:     emails,
 			Subdomains: subdomains,

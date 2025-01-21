@@ -41,15 +41,25 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 
 			if !event.HasDomainTarget() {
 				c <- cmmn.ToolResult{
-					Tool:      enums.ToolWhoIs,
-					Success:   false,
-					Err:       fmt.Errorf("no valid targets: %s", event.Target.Value),
+					Tool: enums.ToolWhoIs,
+					Err: &cmmn.ToolError{
+						Code:    enums.ValidationError,
+						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
+					},
 					Timestamp: time.Now().Unix(),
 				}
 			}
 			result, err := h.whoIsService.RunScan(ctx, event.Target)
 			if err != nil {
 				h.logger.Error("failed to run whoIs scan", slog.Any("error", err))
+				c <- cmmn.ToolResult{
+					Tool: enums.ToolWhoIs,
+					Err: &cmmn.ToolError{
+						Code:    enums.ToolError,
+						Message: fmt.Sprintf("failed to run whoIs scan: %s", err.Error()),
+					},
+				}
+				return
 			}
 
 			h.logger.Info("WhoIs Results", slog.Any("results", result))

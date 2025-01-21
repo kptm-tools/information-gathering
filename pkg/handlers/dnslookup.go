@@ -40,9 +40,11 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 		default:
 			if !event.HasDomainTarget() {
 				c <- cmmn.ToolResult{
-					Tool:      enums.ToolDNSLookup,
-					Success:   false,
-					Err:       fmt.Errorf("no valid targets"),
+					Tool: enums.ToolDNSLookup,
+					Err: &cmmn.ToolError{
+						Code:    enums.ValidationError,
+						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
+					},
 					Timestamp: time.Now().Unix(),
 				}
 				return
@@ -51,6 +53,14 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 			result, err := h.dnsLookupService.RunScan(ctx, event.Target)
 			if err != nil {
 				h.logger.Error("error running DNS handler scan", slog.Any("error", err))
+				c <- cmmn.ToolResult{
+					Tool: enums.ToolDNSLookup,
+					Err: &cmmn.ToolError{
+						Code:    enums.ToolError,
+						Message: fmt.Sprintf("error running DNS handler: %s", err.Error()),
+					},
+				}
+				return
 			}
 
 			h.logger.Debug("DNSLookup Results", slog.Any("results", result))

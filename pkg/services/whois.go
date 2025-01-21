@@ -49,7 +49,6 @@ func (s *WhoIsService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.To
 
 	return cmmn.ToolResult{
 		Tool:      enums.ToolWhoIs,
-		Success:   true,
 		Result:    parsedResult,
 		Timestamp: time.Now().Unix(),
 	}, nil

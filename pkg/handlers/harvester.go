@@ -42,16 +42,27 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 		default:
 			if !event.HasDomainTarget() {
 				c <- cmmn.ToolResult{
-					Tool:      enums.ToolHarvester,
-					Success:   false,
-					Err:       fmt.Errorf("no valid targets"),
+					Tool: enums.ToolHarvester,
+					Err: &cmmn.ToolError{
+						Code:    enums.ValidationError,
+						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
+					},
 					Timestamp: time.Now().Unix(),
 				}
+				return
 			}
 
 			result, err := h.harvesterService.RunScan(ctx, event.Target)
 			if err != nil {
 				h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
+				c <- cmmn.ToolResult{
+					Tool: enums.ToolHarvester,
+					Err: &cmmn.ToolError{
+						Code:    enums.ToolError,
+						Message: fmt.Sprintf("error running Harvester scan: %s", err.Error()),
+					},
+				}
+				return
 			}
 			c <- result
 		}
