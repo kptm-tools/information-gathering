@@ -56,7 +56,7 @@ func (s *DNSLookupService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 
 			Err: &cmmn.ToolError{
 				Code:    enums.ToolError,
-				Message: fmt.Sprintf("error performing DNSLookup %w", err),
+				Message: fmt.Errorf("error performing DNSLookup %w", err).Error(),
 			},
 			Timestamp: time.Now().Unix(),
 		}, nil
