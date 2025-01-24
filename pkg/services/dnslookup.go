@@ -35,7 +35,7 @@ func (s *DNSLookupService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 				Code:    enums.ValidationError,
 				Message: fmt.Sprintf("invalid domain: %s", target.Value),
 			},
-			Timestamp: time.Now().Unix(),
+			Timestamp: time.Now().UTC(),
 		}, nil
 	}
 
@@ -58,13 +58,13 @@ func (s *DNSLookupService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 				Code:    enums.ToolError,
 				Message: fmt.Errorf("error performing DNSLookup %w", err).Error(),
 			},
-			Timestamp: time.Now().Unix(),
+			Timestamp: time.Now().UTC(),
 		}, nil
 	}
 	return cmmn.ToolResult{
 		Tool:      enums.ToolDNSLookup,
 		Result:    result,
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UTC(),
 	}, nil
 }
 

@@ -46,7 +46,7 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 						Code:    enums.ValidationError,
 						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
 					},
-					Timestamp: time.Now().Unix(),
+					Timestamp: time.Now().UTC(),
 				}
 			}
 			result, err := h.whoIsService.RunScan(ctx, event.Target)

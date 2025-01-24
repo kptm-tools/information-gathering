@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/kptm-tools/common/common/enums"
 	cmmn "github.com/kptm-tools/common/common/events"
 	"github.com/kptm-tools/common/common/results"
@@ -74,7 +75,7 @@ func SubscribeToScanStarted(
 					bus.Publish(string(enums.ScanFailedEventSubject), msg)
 				}
 			}
-			slog.Info("Finished gathering information", slog.String("scanID", payload.ScanID))
+			slog.Info("Finished gathering information", slog.String("scanID", payload.ScanID.String()))
 		}(msg)
 
 	})
@@ -102,13 +103,13 @@ func SubscribeToScanCancelled(bus cmmn.EventBus) error {
 			}
 
 			slog.Debug("Event payload", slog.Any("payload", payload))
-			slog.Info("Cancelling Scan", slog.String("scanID", payload.ScanID))
+			slog.Info("Cancelling Scan", slog.String("scanID", payload.ScanID.String()))
 			if cancelFunc, ok := scanContextMap.Load(payload.ScanID); ok {
 				cancelFunc.(context.CancelFunc)() // Cancel the context
 				scanContextMap.Delete(payload.ScanID)
-				slog.Info("Scan successfully cancelled", slog.String("scanID", payload.ScanID))
+				slog.Info("Scan successfully cancelled", slog.String("scanID", payload.ScanID.String()))
 			} else {
-				slog.Warn("No active scan found for ScanID", slog.String("scanID", payload.ScanID))
+				slog.Warn("No active scan found for ScanID", slog.String("scanID", payload.ScanID.String()))
 			}
 		}(msg)
 
@@ -138,7 +139,7 @@ func fanIn(inputs ...<-chan results.ToolResult) <-chan results.ToolResult {
 	return c
 }
 
-func processServiceResult(scanID string, result results.ToolResult, bus cmmn.EventBus) error {
+func processServiceResult(scanID uuid.UUID, result results.ToolResult, bus cmmn.EventBus) error {
 	// 3. When each one finishes, it must publish it's event
 	subject, err := enums.GetToolSubjectName(result.Tool)
 	if err != nil {
