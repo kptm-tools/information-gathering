@@ -47,7 +47,7 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 						Code:    enums.ValidationError,
 						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
 					},
-					Timestamp: time.Now().Unix(),
+					Timestamp: time.Now().UTC(),
 				}
 				return
 			}
