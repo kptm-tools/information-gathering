@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kptm-tools/common/common/enums"
+	"github.com/kptm-tools/common/common/results"
 	cmmn "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/likexian/whois"
@@ -48,8 +49,10 @@ func (s *WhoIsService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.To
 	}
 
 	return cmmn.ToolResult{
-		Tool:      enums.ToolWhoIs,
-		Result:    parsedResult,
+		Tool: enums.ToolWhoIs,
+		Result: results.WhoIsResult{
+			RawData: &parsedResult,
+		},
 		Timestamp: time.Now().UTC(),
 	}, nil
 }
