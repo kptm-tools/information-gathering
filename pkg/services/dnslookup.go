@@ -63,7 +63,7 @@ func (s *DNSLookupService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 	}
 	return cmmn.ToolResult{
 		Tool:      enums.ToolDNSLookup,
-		Result:    result,
+		Result:    &result,
 		Timestamp: time.Now().UTC(),
 	}, nil
 }
