@@ -104,7 +104,7 @@ func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 				Code:    enums.ToolError,
 				Message: fmt.Sprintf("error harvesting subdomains: %s", err.Error()),
 			},
-			Result: cmmn.HarvesterResult{
+			Result: &cmmn.HarvesterResult{
 				Emails: emails,
 			},
 			Timestamp: time.Now().UTC(),
@@ -113,7 +113,7 @@ func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 
 	return cmmn.ToolResult{
 		Tool: enums.ToolHarvester,
-		Result: cmmn.HarvesterResult{
+		Result: &cmmn.HarvesterResult{
 			Emails:     emails,
 			Subdomains: subdomains,
 		},
