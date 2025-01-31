@@ -86,7 +86,8 @@ func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmm
 	if err != nil {
 		s.Logger.Error("Error harvesting emails", "target", target, "error", err)
 		return cmmn.ToolResult{
-			Tool: enums.ToolHarvester,
+			Tool:   enums.ToolHarvester,
+			Result: &cmmn.HarvesterResult{},
 			Err: &cmmn.ToolError{
 				Code:    enums.ToolError,
 				Message: fmt.Sprintf("error harvesting emails: %s", err.Error()),
