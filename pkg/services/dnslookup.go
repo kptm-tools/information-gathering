@@ -1,13 +1,13 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
-	"strings"
-	"sync"
 	"time"
 
+	"github.com/kptm-tools/common/common/enums"
 	cmmn "github.com/kptm-tools/common/common/results"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/miekg/dns"
@@ -25,63 +25,55 @@ func NewDNSLookupService() *DNSLookupService {
 	}
 }
 
-func (s *DNSLookupService) RunScan(targets []string) (*[]cmmn.TargetResult, error) {
+func (s *DNSLookupService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.ToolResult, error) {
 
-	var (
-		targetResults []cmmn.TargetResult
-		errs          []error
-		mu            sync.Mutex
-		wg            sync.WaitGroup
-	)
-
-	wg.Add(len(targets))
-	for _, target := range targets {
-		if !isValidDomain(target) {
-			s.Logger.Error("Not a valid domain", "domain", target)
-			continue
-		}
-
-		go func(domain string) {
-			defer wg.Done()
-
-			result, err := performDNSLookup(target)
-			if err != nil {
-				s.Logger.Error("Error performing DNSLookup for target ", "target", target, "error", err)
-				mu.Lock()
-				errs = append(errs, err...)
-				mu.Unlock()
-				return
-			}
-
-			tResult := cmmn.TargetResult{
-				Target:  domain,
-				Results: map[cmmn.ServiceName]interface{}{cmmn.ServiceHarvester: result},
-			}
-
-			mu.Lock()
-			targetResults = append(targetResults, tResult)
-			mu.Unlock()
-		}(target)
-	}
-	wg.Wait()
-
-	if len(errs) > 0 {
-		var formattedErrors []string
-		for _, e := range errs {
-			formattedErrors = append(formattedErrors, e.Error())
-		}
-		return &targetResults, fmt.Errorf("completed with errors:\n%s", strings.Join(formattedErrors, "\n"))
+	if !isValidDomain(target.Value) {
+		s.Logger.Error("Not a valid domain", "domain", target)
+		return cmmn.ToolResult{
+			Tool:   enums.ToolDNSLookup,
+			Result: &cmmn.DNSLookupResult{},
+			Err: &cmmn.ToolError{
+				Code:    enums.ValidationError,
+				Message: fmt.Sprintf("invalid domain: %s", target.Value),
+			},
+			Timestamp: time.Now().UTC(),
+		}, nil
 	}
 
-	return &targetResults, nil
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		s.Logger.Warn("Context canceled during DNS lookup", "domain", target.Value)
+		return cmmn.ToolResult{}, ctx.Err()
+	default:
+		// Proceed with the operation
+	}
+
+	result, err := performDNSLookup(ctx, target.Value)
+	if err != nil {
+		s.Logger.Error("Error performing DNSLookup for target ", "target", target, "error", err)
+		return cmmn.ToolResult{
+			Tool:   enums.ToolDNSLookup,
+			Result: &cmmn.DNSLookupResult{},
+			Err: &cmmn.ToolError{
+				Code:    enums.ToolError,
+				Message: fmt.Errorf("error performing DNSLookup %w", err).Error(),
+			},
+			Timestamp: time.Now().UTC(),
+		}, nil
+	}
+	return cmmn.ToolResult{
+		Tool:      enums.ToolDNSLookup,
+		Result:    &result,
+		Timestamp: time.Now().UTC(),
+	}, nil
 }
 
-func performDNSLookup(domain string) (*cmmn.DNSLookupResult, []error) {
+func performDNSLookup(ctx context.Context, domain string) (cmmn.DNSLookupResult, error) {
 
 	var (
 		records       []cmmn.DNSRecord
 		DNSSECEnabled bool
-		errs          []error
 	)
 	start := time.Now()
 	wantRecords := []uint16{
@@ -96,10 +88,18 @@ func performDNSLookup(domain string) (*cmmn.DNSLookupResult, []error) {
 	}
 
 	for _, recordType := range wantRecords {
+
+		// Check for context cancellation
+		select {
+		case <-ctx.Done():
+			return cmmn.DNSLookupResult{}, ctx.Err()
+		default:
+			// Proceed with DNS query
+		}
+
 		typeRecords, err := QueryDNSRecord(domain, recordType)
 		if err != nil {
-			errs = append(errs, err)
-			continue
+			return cmmn.DNSLookupResult{}, err
 		}
 		records = append(records, typeRecords...)
 	}
@@ -111,13 +111,13 @@ func performDNSLookup(domain string) (*cmmn.DNSLookupResult, []error) {
 
 	duration := time.Since(start)
 
-	return &cmmn.DNSLookupResult{
+	return cmmn.DNSLookupResult{
 		Domain:         domain,
 		DNSRecords:     records,
 		DNSSECEnabled:  DNSSECEnabled,
 		LookupDuration: duration,
 		CreatedAt:      time.Now(),
-	}, errs
+	}, nil
 
 }
 
