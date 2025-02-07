@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/kptm-tools/common/common/enums"
-	cmmn "github.com/kptm-tools/common/common/results"
+	"github.com/kptm-tools/common/common/pkg/enums"
+	"github.com/kptm-tools/common/common/pkg/results/tools"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"golang.org/x/net/html"
 )
@@ -70,56 +70,54 @@ func NewHarvesterService() *HarvesterService {
 	}
 }
 
-func (s *HarvesterService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.ToolResult, error) {
+func (s *HarvesterService) RunScan(ctx context.Context, target string) (tools.ToolResult, error) {
 
 	// To avoid rate-limiting, we don't use coroutines here
+	result := tools.ToolResult{
+		Tool:      enums.ToolHarvester,
+		Result:    &tools.HarvesterResult{},
+		Timestamp: time.Now().UTC(),
+	}
 
 	select {
 	case <-ctx.Done():
 		s.Logger.Warn("Context canceled during Harvester search", "target", target)
-		return cmmn.ToolResult{}, ctx.Err()
+		return tools.ToolResult{}, ctx.Err()
 	default:
 		// Proceed with operation
 	}
 
-	emails, err := s.HarvestEmails(ctx, target.Value)
+	emails, err := s.HarvestEmails(ctx, target)
 	if err != nil {
 		s.Logger.Error("Error harvesting emails", "target", target, "error", err)
-		return cmmn.ToolResult{
-			Tool:   enums.ToolHarvester,
-			Result: &cmmn.HarvesterResult{},
-			Err: &cmmn.ToolError{
-				Code:    enums.ToolError,
-				Message: fmt.Sprintf("error harvesting emails: %s", err.Error()),
-			},
-			Timestamp: time.Now().UTC(),
-		}, nil
+		result.Err = &tools.ToolError{
+			Code:    enums.ToolError,
+			Message: fmt.Sprintf("error harvesting emails: %s", err.Error()),
+		}
+
+		return result, nil
+	}
+	result.Result = &tools.HarvesterResult{
+		Emails: emails,
 	}
 
-	subdomains, err := s.HarvestSubdomains(ctx, target.Value)
+	subdomains, err := s.HarvestSubdomains(ctx, target)
 	if err != nil {
 		s.Logger.Error("Error harvesting subdomains", "target", target, "error", err)
-		return cmmn.ToolResult{
-			Tool: enums.ToolHarvester,
-			Err: &cmmn.ToolError{
-				Code:    enums.ToolError,
-				Message: fmt.Sprintf("error harvesting subdomains: %s", err.Error()),
-			},
-			Result: &cmmn.HarvesterResult{
-				Emails: emails,
-			},
-			Timestamp: time.Now().UTC(),
-		}, nil
+		result.Err = &tools.ToolError{
+			Code:    enums.ToolError,
+			Message: fmt.Sprintf("error harvesting subdomains: %s", err.Error()),
+		}
+
+		return result, nil
 	}
 
-	return cmmn.ToolResult{
-		Tool: enums.ToolHarvester,
-		Result: &cmmn.HarvesterResult{
-			Emails:     emails,
-			Subdomains: subdomains,
-		},
-		Timestamp: time.Now().UTC(),
-	}, nil
+	result.Result = &tools.HarvesterResult{
+		Emails:     emails,
+		Subdomains: subdomains,
+	}
+
+	return result, nil
 }
 
 // HarvestEmails extracts emails from a target
