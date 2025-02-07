@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"time"
 
-	"github.com/kptm-tools/common/common/enums"
-	cmmn "github.com/kptm-tools/common/common/results"
+	"github.com/kptm-tools/common/common/pkg/enums"
+	"github.com/kptm-tools/common/common/pkg/results/tools"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/miekg/dns"
 )
@@ -25,54 +24,40 @@ func NewDNSLookupService() *DNSLookupService {
 	}
 }
 
-func (s *DNSLookupService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.ToolResult, error) {
-
-	if !isValidDomain(target.Value) {
-		s.Logger.Error("Not a valid domain", "domain", target)
-		return cmmn.ToolResult{
-			Tool:   enums.ToolDNSLookup,
-			Result: &cmmn.DNSLookupResult{},
-			Err: &cmmn.ToolError{
-				Code:    enums.ValidationError,
-				Message: fmt.Sprintf("invalid domain: %s", target.Value),
-			},
-			Timestamp: time.Now().UTC(),
-		}, nil
+func (s *DNSLookupService) RunScan(ctx context.Context, domain string) (tools.ToolResult, error) {
+	result := tools.ToolResult{
+		Tool:      enums.ToolDNSLookup,
+		Result:    &tools.DNSLookupResult{},
+		Timestamp: time.Now().UTC(),
 	}
 
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		s.Logger.Warn("Context canceled during DNS lookup", "domain", target.Value)
-		return cmmn.ToolResult{}, ctx.Err()
+		s.Logger.Warn("Context canceled during DNS lookup", "domain", domain)
+		return tools.ToolResult{}, ctx.Err()
 	default:
 		// Proceed with the operation
 	}
 
-	result, err := performDNSLookup(ctx, target.Value)
+	lookupResult, err := performDNSLookup(ctx, domain)
 	if err != nil {
-		s.Logger.Error("Error performing DNSLookup for target ", "target", target, "error", err)
-		return cmmn.ToolResult{
-			Tool:   enums.ToolDNSLookup,
-			Result: &cmmn.DNSLookupResult{},
-			Err: &cmmn.ToolError{
-				Code:    enums.ToolError,
-				Message: fmt.Errorf("error performing DNSLookup %w", err).Error(),
-			},
-			Timestamp: time.Now().UTC(),
-		}, nil
+		s.Logger.Error("Error performing DNSLookup for target ", "target", domain, "error", err)
+		result.Err = &tools.ToolError{
+			Code:    enums.ToolError,
+			Message: fmt.Errorf("error performing DNSLookup %w", err).Error(),
+		}
+		return result, nil
 	}
-	return cmmn.ToolResult{
-		Tool:      enums.ToolDNSLookup,
-		Result:    &result,
-		Timestamp: time.Now().UTC(),
-	}, nil
+
+	result.Result = &lookupResult
+	return result, nil
 }
 
-func performDNSLookup(ctx context.Context, domain string) (cmmn.DNSLookupResult, error) {
+func performDNSLookup(ctx context.Context, domain string) (tools.DNSLookupResult, error) {
 
 	var (
-		records       []cmmn.DNSRecord
+		records       []tools.DNSRecord
 		DNSSECEnabled bool
 	)
 	start := time.Now()
@@ -92,26 +77,26 @@ func performDNSLookup(ctx context.Context, domain string) (cmmn.DNSLookupResult,
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
-			return cmmn.DNSLookupResult{}, ctx.Err()
+			return tools.DNSLookupResult{}, ctx.Err()
 		default:
 			// Proceed with DNS query
 		}
 
 		typeRecords, err := QueryDNSRecord(domain, recordType)
 		if err != nil {
-			return cmmn.DNSLookupResult{}, err
+			return tools.DNSLookupResult{}, err
 		}
 		records = append(records, typeRecords...)
 	}
 
 	// Check if we got a DNSKeyRecord somewhere
-	if cmmn.HasDNSKeyRecord(records) {
+	if tools.HasDNSKeyRecord(records) {
 		DNSSECEnabled = true
 	}
 
 	duration := time.Since(start)
 
-	return cmmn.DNSLookupResult{
+	return tools.DNSLookupResult{
 		Domain:         domain,
 		DNSRecords:     records,
 		DNSSECEnabled:  DNSSECEnabled,
@@ -122,10 +107,10 @@ func performDNSLookup(ctx context.Context, domain string) (cmmn.DNSLookupResult,
 }
 
 // QueryDNSRecord fetches available records of the specified type and returns TTL information
-func QueryDNSRecord(domain string, recordType uint16) ([]cmmn.DNSRecord, error) {
-	var records []cmmn.DNSRecord
+func QueryDNSRecord(domain string, recordType uint16) ([]tools.DNSRecord, error) {
+	var records []tools.DNSRecord
 
-	r := cmmn.GoogleResolver
+	r := tools.GoogleResolver
 	// Create DNS message
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(domain), recordType)
@@ -141,56 +126,56 @@ func QueryDNSRecord(domain string, recordType uint16) ([]cmmn.DNSRecord, error) 
 	for _, answer := range res.Answer {
 		switch record := answer.(type) {
 		case *dns.A:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name:  record.Header().Name,
-				Type:  cmmn.ARecord,
+				Type:  tools.ARecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.A.String(),
 			})
 		case *dns.AAAA:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name:  record.Header().Name,
-				Type:  cmmn.AAAARecord,
+				Type:  tools.AAAARecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.AAAA.String(),
 			})
 		case *dns.CNAME:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name:  record.Header().Name,
-				Type:  cmmn.CNAMERecord,
+				Type:  tools.CNAMERecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.Target,
 			})
 		case *dns.MX:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name: record.Hdr.Name,
-				Type: cmmn.MXRecord,
+				Type: tools.MXRecord,
 				TTL:  int(record.Hdr.Ttl),
-				Value: cmmn.MailExchange{
+				Value: tools.MailExchange{
 					Host:     record.Mx,
 					Priority: int(record.Preference),
 				},
 			})
 		case *dns.TXT:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name:  record.Hdr.Name,
-				Type:  cmmn.TXTRecord,
+				Type:  tools.TXTRecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.Txt,
 			})
 		case *dns.NS:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name:  record.Hdr.Name,
-				Type:  cmmn.NSRecord,
+				Type:  tools.NSRecord,
 				TTL:   int(record.Hdr.Ttl),
 				Value: record.Ns,
 			})
 		case *dns.SOA:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name: record.Hdr.Name,
-				Type: cmmn.SOARecord,
+				Type: tools.SOARecord,
 				TTL:  int(record.Hdr.Ttl),
-				Value: cmmn.StartOfAuthority{
+				Value: tools.StartOfAuthority{
 					PrimaryNS:  record.Ns,
 					AdminEmail: record.Mbox,
 					Serial:     int(record.Serial),
@@ -201,11 +186,11 @@ func QueryDNSRecord(domain string, recordType uint16) ([]cmmn.DNSRecord, error) 
 				},
 			})
 		case *dns.DNSKEY:
-			records = append(records, cmmn.DNSRecord{
+			records = append(records, tools.DNSRecord{
 				Name: record.Hdr.Name,
-				Type: cmmn.DNSKeyRecord,
+				Type: tools.DNSKeyRecord,
 				TTL:  int(record.Hdr.Ttl),
-				Value: cmmn.DNSKey{
+				Value: tools.DNSKey{
 					Flags:     int(record.Flags),
 					Protocol:  int(record.Protocol),
 					Algorithm: int(record.Algorithm),
@@ -214,12 +199,4 @@ func QueryDNSRecord(domain string, recordType uint16) ([]cmmn.DNSRecord, error) 
 		}
 	}
 	return records, nil
-}
-
-func isValidDomain(domain string) bool {
-	// net.LookupHost validates the domain and resolves it
-	if _, err := net.LookupHost(domain); err != nil {
-		return false
-	}
-	return true
 }

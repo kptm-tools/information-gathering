@@ -5,9 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/kptm-tools/common/common/enums"
-	"github.com/kptm-tools/common/common/results"
-	cmmn "github.com/kptm-tools/common/common/results"
+	"github.com/kptm-tools/common/common/pkg/enums"
+	"github.com/kptm-tools/common/common/pkg/results/tools"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/likexian/whois"
 	whoisparser "github.com/likexian/whois-parser"
@@ -25,32 +24,32 @@ func NewWhoIsService() *WhoIsService {
 	}
 }
 
-func (s *WhoIsService) RunScan(ctx context.Context, target cmmn.Target) (cmmn.ToolResult, error) {
+func (s *WhoIsService) RunScan(ctx context.Context, domain string) (tools.ToolResult, error) {
 	s.Logger.Info("Running WhoIs scanner...")
 
 	select {
 	case <-ctx.Done():
-		s.Logger.Warn("Context cancelled during WhoIs search", "target", target)
-		return cmmn.ToolResult{}, ctx.Err()
+		s.Logger.Warn("Context cancelled during WhoIs search", "target", domain)
+		return tools.ToolResult{}, ctx.Err()
 	default:
 		// Proceed with the operation
 	}
 
-	whoIsRaw, err := whois.Whois(target.Value)
+	whoIsRaw, err := whois.Whois(domain)
 	if err != nil {
-		s.Logger.Error("Error fetching WHOIS", "target", target, "error", err)
-		return cmmn.ToolResult{}, err
+		s.Logger.Error("Error fetching WHOIS", "target", domain, "error", err)
+		return tools.ToolResult{}, err
 	}
 
 	parsedResult, err := whoisparser.Parse(whoIsRaw)
 	if err != nil {
-		s.Logger.Error("Error parsing WHOIS data", "target", target, "error", err)
-		return cmmn.ToolResult{}, err
+		s.Logger.Error("Error parsing WHOIS data", "target", domain, "error", err)
+		return tools.ToolResult{}, err
 	}
 
-	return cmmn.ToolResult{
+	return tools.ToolResult{
 		Tool: enums.ToolWhoIs,
-		Result: &results.WhoIsResult{
+		Result: &tools.WhoIsResult{
 			RawData: &parsedResult,
 		},
 		Timestamp: time.Now().UTC(),

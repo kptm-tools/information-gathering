@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	cmmn "github.com/kptm-tools/common/common/events"
+	cmmn "github.com/kptm-tools/common/common/pkg/events"
 	"github.com/kptm-tools/information-gathering/pkg/config"
 	"github.com/kptm-tools/information-gathering/pkg/events"
 	"github.com/kptm-tools/information-gathering/pkg/handlers"

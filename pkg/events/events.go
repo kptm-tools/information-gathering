@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/kptm-tools/common/common/enums"
-	cmmn "github.com/kptm-tools/common/common/events"
-	"github.com/kptm-tools/common/common/results"
+	"github.com/kptm-tools/common/common/pkg/enums"
+	cmmn "github.com/kptm-tools/common/common/pkg/events"
+	"github.com/kptm-tools/common/common/pkg/results/tools"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 	"github.com/nats-io/nats.go"
 )
@@ -117,13 +117,13 @@ func SubscribeToScanCancelled(bus cmmn.EventBus) error {
 	return nil
 }
 
-func fanIn(inputs ...<-chan results.ToolResult) <-chan results.ToolResult {
-	c := make(chan results.ToolResult)
+func fanIn(inputs ...<-chan tools.ToolResult) <-chan tools.ToolResult {
+	c := make(chan tools.ToolResult)
 	var wg sync.WaitGroup
 
 	for _, input := range inputs {
 		wg.Add(1)
-		go func(ch <-chan results.ToolResult) {
+		go func(ch <-chan tools.ToolResult) {
 			defer wg.Done()
 			for result := range ch {
 				c <- result
@@ -139,7 +139,7 @@ func fanIn(inputs ...<-chan results.ToolResult) <-chan results.ToolResult {
 	return c
 }
 
-func processServiceResult(scanID uuid.UUID, result results.ToolResult, bus cmmn.EventBus) error {
+func processServiceResult(scanID uuid.UUID, result tools.ToolResult, bus cmmn.EventBus) error {
 	// 3. When each one finishes, it must publish it's event
 	subject, err := enums.GetToolSubjectName(result.Tool)
 	if err != nil {

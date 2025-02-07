@@ -7,9 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/kptm-tools/common/common/enums"
-	"github.com/kptm-tools/common/common/events"
-	cmmn "github.com/kptm-tools/common/common/results"
+	"github.com/kptm-tools/common/common/pkg/enums"
+	"github.com/kptm-tools/common/common/pkg/events"
+	"github.com/kptm-tools/common/common/pkg/results/tools"
+	"github.com/kptm-tools/common/common/pkg/utils"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -27,8 +28,8 @@ func NewDNSLookupHandler(dnsLookupService interfaces.IDNSLookupService) *DNSLook
 	}
 }
 
-func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ToolResult {
-	c := make(chan cmmn.ToolResult)
+func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan tools.ToolResult {
+	c := make(chan tools.ToolResult)
 
 	go func() {
 		defer close(c)
@@ -38,26 +39,27 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 			h.logger.Info("DNSLookupHandler: scan cancelled", slog.Any("scanID", event.ScanID))
 			return
 		default:
-			if !event.HasDomainTarget() {
-				c <- cmmn.ToolResult{
+			target, err := utils.ValidateHostForTool(event.Target.Value, enums.ToolDNSLookup)
+			if err != nil {
+				c <- tools.ToolResult{
 					Tool:   enums.ToolDNSLookup,
-					Result: &cmmn.DNSLookupResult{},
-					Err: &cmmn.ToolError{
+					Result: &tools.DNSLookupResult{},
+					Err: &tools.ToolError{
 						Code:    enums.ValidationError,
-						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
+						Message: err.Error(),
 					},
 					Timestamp: time.Now().UTC(),
 				}
 				return
 			}
 
-			result, err := h.dnsLookupService.RunScan(ctx, event.Target)
+			result, err := h.dnsLookupService.RunScan(ctx, target)
 			if err != nil {
 				h.logger.Error("error running DNS handler scan", slog.Any("error", err))
-				c <- cmmn.ToolResult{
+				c <- tools.ToolResult{
 					Tool:   enums.ToolDNSLookup,
-					Result: &cmmn.DNSLookupResult{},
-					Err: &cmmn.ToolError{
+					Result: &tools.DNSLookupResult{},
+					Err: &tools.ToolError{
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("error running DNS handler: %s", err.Error()),
 					},
