@@ -59,14 +59,16 @@ type Result struct {
 }
 
 type HarvesterService struct {
-	Logger *slog.Logger
+	Logger     *slog.Logger
+	HTTPClient *http.Client
 }
 
 var _ interfaces.IHarvesterService = (*HarvesterService)(nil)
 
 func NewHarvesterService() *HarvesterService {
 	return &HarvesterService{
-		Logger: slog.New(slog.Default().Handler()),
+		Logger:     slog.New(slog.Default().Handler()),
+		HTTPClient: createHTTPClient(10 * time.Second),
 	}
 }
 
@@ -195,10 +197,10 @@ wordLoop:
 				// Proceed with subdomain processing
 			}
 
-			subdomain, err := s.processSubdomain(word, domain)
+			subdomain, err := s.processSubdomain(ctx, word, domain)
 			if err != nil {
 				// Subdomain does not exist
-				s.Logger.Debug("Subdomain does not exist", "word", word, "error", err)
+				// s.Logger.Debug("Subdomain does not exist", "word", word, "error", err)
 				return
 			}
 
@@ -262,11 +264,22 @@ func (s *HarvesterService) readWordList(size wordListSize) ([]string, error) {
 }
 
 // processSubdomain processes a single word to check if the subdomain exists
-func (s *HarvesterService) processSubdomain(word, domain string) (string, error) {
+func (s *HarvesterService) processSubdomain(ctx context.Context, word, domain string) (string, error) {
 	url := fmt.Sprintf("http://%s.%s", word, domain)
-	res, err := http.Get(url)
+
+	req, err := createHTTPRequest("GET", url, map[string]string{})
 	if err != nil {
 		return "", err
+	}
+
+	req = req.WithContext(ctx)
+
+	res, err := s.HTTPClient.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("subdomain check timed out: %w", ctx.Err())
+		}
+		return "", fmt.Errorf("failed to check subdomain %s: %w", url, err)
 	}
 	defer res.Body.Close()
 
@@ -282,13 +295,13 @@ func (s *HarvesterService) processSubdomain(word, domain string) (string, error)
 func (s *HarvesterService) scrapeLinks(ctx context.Context, target string) ([]string, error) {
 	s.Logger.Debug("Scraping Google and LinkedIn links", "target", target)
 
-	googleLinks, err := scrapeGoogleLinks(target)
+	googleLinks, err := scrapeGoogleLinks(ctx, target, s.HTTPClient)
 	if err != nil {
 		s.Logger.Warn("Standard Google scraping failed", "target", target, "error", err)
 	}
 
 	randomTimeout(2, 5)
-	linkedInLinks, err := scrapeLinkedinLinks(target)
+	linkedInLinks, err := scrapeLinkedinLinks(ctx, target, s.HTTPClient)
 	if err != nil {
 		s.Logger.Warn("Google scraping for LinkedIn links failed", "target", target, "error", err)
 	}
@@ -316,7 +329,7 @@ func (s *HarvesterService) processLinks(links []string, domain string, ctx conte
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go worker(jobs, results, &wg, ctx)
+		go s.worker(jobs, results, &wg, ctx)
 	}
 
 	// Send jobs to the jobs channel
@@ -345,7 +358,7 @@ func (s *HarvesterService) processLinks(links []string, domain string, ctx conte
 	return allEmails
 }
 
-func worker(jobs <-chan Job, results chan<- Result, wg *sync.WaitGroup, ctx context.Context) {
+func (s *HarvesterService) worker(jobs <-chan Job, results chan<- Result, wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
 	for {
 		select {
@@ -356,7 +369,7 @@ func worker(jobs <-chan Job, results chan<- Result, wg *sync.WaitGroup, ctx cont
 			if !ok {
 				return
 			}
-			emails, err := extractEmailsFromPage(job.Domain, job.Link)
+			emails, err := extractEmailsFromPage(ctx, job.Domain, job.Link, s.HTTPClient)
 			results <- Result{Emails: emails, Error: err}
 		}
 	}
@@ -404,12 +417,12 @@ func isValidHTTPMethod(method string) bool {
 }
 
 // Perform a GET request with custom HTTP headers
-func fetchWithCustomHeaders(url string, headers map[string]string) (*http.Response, error) {
-	client := createHTTPClient(2 * time.Second)
+func fetchWithCustomHeaders(ctx context.Context, url string, headers map[string]string, client *http.Client) (*http.Response, error) {
 	req, err := createHTTPRequest("GET", url, headers)
 	if err != nil {
 		return nil, err
 	}
+	req = req.WithContext(ctx)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -424,18 +437,19 @@ func getRandomUserAgent() string {
 }
 
 // HTTP client with random User-Agent
-func fetchWithRandomUserAgent(url string) (*http.Response, error) {
+func fetchWithRandomUserAgent(ctx context.Context, url string, client *http.Client) (*http.Response, error) {
 	headers := map[string]string{
 		"User-Agent": getRandomUserAgent(),
 	}
-	return fetchWithCustomHeaders(url, headers)
+	return fetchWithCustomHeaders(ctx, url, headers, client)
 }
 
-func scrapeGoogleLinks(query string) ([]string, error) {
+func scrapeGoogleLinks(ctx context.Context, query string, client *http.Client) ([]string, error) {
 	searchURL := fmt.Sprintf("https://www.google.com/search?num=100&q=%s", url.QueryEscape(query))
+	slog.Debug("Searching Google links...", slog.String("search_url", searchURL))
 
 	// Make HTTP request
-	resp, err := fetchWithRandomUserAgent(searchURL)
+	resp, err := fetchWithRandomUserAgent(ctx, searchURL, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch search results: %w", err)
 	}
@@ -473,16 +487,20 @@ func scrapeGoogleLinks(query string) ([]string, error) {
 		}
 	})
 
+	slog.Debug("Found google links",
+		slog.Int("link_count", len(links)),
+		slog.Any("links", links))
+
 	return links, nil
 }
 
-func scrapeLinkedinLinks(query string) ([]string, error) {
+func scrapeLinkedinLinks(ctx context.Context, query string, client *http.Client) ([]string, error) {
 	searchURL := fmt.Sprintf(
 		"https://www.google.com/search?num=100&q=site:linkedin.com+%s",
 		url.QueryEscape(query),
 	)
 
-	resp, err := fetchWithRandomUserAgent(searchURL)
+	resp, err := fetchWithRandomUserAgent(ctx, searchURL, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch linkedin search results: %w", err)
 	}
@@ -521,8 +539,8 @@ func scrapeLinkedinLinks(query string) ([]string, error) {
 	return links, nil
 }
 
-func extractEmailsFromPage(domain, pageURL string) ([]string, error) {
-	doc, err := fetchPageContent(pageURL)
+func extractEmailsFromPage(ctx context.Context, domain, pageURL string, client *http.Client) ([]string, error) {
+	doc, err := fetchPageContent(ctx, pageURL, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed fo fetch page: %w", err)
 	}
@@ -532,9 +550,9 @@ func extractEmailsFromPage(domain, pageURL string) ([]string, error) {
 }
 
 // fetchPageContent fetches a page and returns the raw HTML
-func fetchPageContent(pageURL string) (*goquery.Document, error) {
+func fetchPageContent(ctx context.Context, pageURL string, client *http.Client) (*goquery.Document, error) {
 
-	resp, err := fetchWithRandomUserAgent(pageURL)
+	resp, err := fetchWithRandomUserAgent(ctx, pageURL, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to GET page %s: %w", pageURL, err)
 	}
