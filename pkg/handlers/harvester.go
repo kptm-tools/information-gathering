@@ -7,9 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/kptm-tools/common/common/enums"
-	"github.com/kptm-tools/common/common/events"
-	cmmn "github.com/kptm-tools/common/common/results"
+	"github.com/kptm-tools/common/common/pkg/enums"
+	"github.com/kptm-tools/common/common/pkg/events"
+	"github.com/kptm-tools/common/common/pkg/results/tools"
+	"github.com/kptm-tools/common/common/pkg/utils"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -27,9 +28,9 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 	}
 }
 
-func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ToolResult {
+func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan tools.ToolResult {
 
-	c := make(chan cmmn.ToolResult)
+	c := make(chan tools.ToolResult)
 	// 1. Parse targets from event
 
 	go func() {
@@ -40,24 +41,26 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 			h.logger.Info("WhoIsHandler: Scan cancelled", slog.Any("scanID", event.ScanID))
 			return
 		default:
-			if !event.HasDomainTarget() {
-				c <- cmmn.ToolResult{
+			target, err := utils.ValidateHostForTool(event.Target.Value, enums.ToolHarvester)
+			if err != nil {
+				h.logger.Error("Error validating host for tool", slog.Any("error", err))
+				c <- tools.ToolResult{
 					Tool: enums.ToolHarvester,
-					Err: &cmmn.ToolError{
+					Err: &tools.ToolError{
 						Code:    enums.ValidationError,
-						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
+						Message: err.Error(),
 					},
 					Timestamp: time.Now().UTC(),
 				}
 				return
 			}
 
-			result, err := h.harvesterService.RunScan(ctx, event.Target)
+			result, err := h.harvesterService.RunScan(ctx, target)
 			if err != nil {
 				h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
-				c <- cmmn.ToolResult{
+				c <- tools.ToolResult{
 					Tool: enums.ToolHarvester,
-					Err: &cmmn.ToolError{
+					Err: &tools.ToolError{
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("error running Harvester scan: %s", err.Error()),
 					},

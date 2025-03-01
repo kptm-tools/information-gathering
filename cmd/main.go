@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	cmmn "github.com/kptm-tools/common/common/events"
+	cmmn "github.com/kptm-tools/common/common/pkg/events"
 	"github.com/kptm-tools/information-gathering/pkg/config"
 	"github.com/kptm-tools/information-gathering/pkg/events"
 	"github.com/kptm-tools/information-gathering/pkg/handlers"
@@ -24,7 +24,7 @@ func main() {
 	w := os.Stdout
 	slog.SetDefault(slog.New(
 		tint.NewHandler(w, &tint.Options{
-			Level:      slog.LevelInfo,
+			Level:      slog.LevelDebug,
 			TimeFormat: time.Stamp,
 		}),
 	))

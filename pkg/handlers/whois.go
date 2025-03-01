@@ -7,9 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/kptm-tools/common/common/enums"
-	"github.com/kptm-tools/common/common/events"
-	cmmn "github.com/kptm-tools/common/common/results"
+	"github.com/kptm-tools/common/common/pkg/enums"
+	"github.com/kptm-tools/common/common/pkg/events"
+	"github.com/kptm-tools/common/common/pkg/results/tools"
+	"github.com/kptm-tools/common/common/pkg/utils"
 	"github.com/kptm-tools/information-gathering/pkg/interfaces"
 )
 
@@ -27,8 +28,8 @@ func NewWhoIsHandler(whoIsService interfaces.IWhoIsService) *WhoIsHandler {
 	}
 }
 
-func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan cmmn.ToolResult {
-	c := make(chan cmmn.ToolResult)
+func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan tools.ToolResult {
+	c := make(chan tools.ToolResult)
 
 	go func() {
 		defer close(c)
@@ -38,25 +39,27 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 			h.logger.Info("WhoIsHandler: Scan cancelled", slog.Any("scanID", event.ScanID))
 			return
 		default:
-
-			if !event.HasDomainTarget() {
-				c <- cmmn.ToolResult{
+			target, err := utils.ValidateHostForTool(event.Target.Value, enums.ToolWhoIs)
+			if err != nil {
+				c <- tools.ToolResult{
 					Tool:   enums.ToolWhoIs,
-					Result: &cmmn.WhoIsResult{},
-					Err: &cmmn.ToolError{
+					Result: &tools.WhoIsResult{},
+					Err: &tools.ToolError{
 						Code:    enums.ValidationError,
 						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
 					},
 					Timestamp: time.Now().UTC(),
 				}
+				return
 			}
-			result, err := h.whoIsService.RunScan(ctx, event.Target)
+
+			result, err := h.whoIsService.RunScan(ctx, target)
 			if err != nil {
 				h.logger.Error("failed to run whoIs scan", slog.Any("error", err))
-				c <- cmmn.ToolResult{
+				c <- tools.ToolResult{
 					Tool:   enums.ToolWhoIs,
-					Result: &cmmn.WhoIsResult{},
-					Err: &cmmn.ToolError{
+					Result: &tools.WhoIsResult{},
+					Err: &tools.ToolError{
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("failed to run whoIs scan: %s", err.Error()),
 					},
