@@ -40,7 +40,10 @@ func main() {
 	}
 
 	// Services
-	whoIsService := services.NewWhoIsService()
+	whoIsService := services.NewWhoIsService(&services.WhoIsServiceOptions{
+		MaxRetries: 3,
+		RetryDelay: 5 * time.Second,
+	})
 	dnsLookupService := services.NewDNSLookupService()
 	harvesterService := services.NewHarvesterService()
 
@@ -66,7 +69,6 @@ func main() {
 	}
 
 	waitForShutdown()
-
 }
 
 func waitForShutdown() {
