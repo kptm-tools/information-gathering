@@ -13,37 +13,67 @@ import (
 )
 
 type WhoIsService struct {
-	Logger *slog.Logger
+	maxRetries int
+	retryDelay time.Duration
+}
+
+type WhoIsServiceOptions struct {
+	MaxRetries int
+	RetryDelay time.Duration
 }
 
 var _ interfaces.IWhoIsService = (*WhoIsService)(nil)
 
-func NewWhoIsService() *WhoIsService {
+func NewWhoIsService(opts *WhoIsServiceOptions) *WhoIsService {
+	if opts == nil {
+		opts = &WhoIsServiceOptions{}
+	}
+	maxRetries := opts.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+	retryDelay := opts.RetryDelay
+	if retryDelay <= 0 {
+		retryDelay = 5 * time.Second
+	}
+
 	return &WhoIsService{
-		Logger: slog.New(slog.Default().Handler()),
+		maxRetries: maxRetries,
+		retryDelay: retryDelay,
 	}
 }
 
 func (s *WhoIsService) RunScan(ctx context.Context, domain string) (tools.ToolResult, error) {
-	s.Logger.Info("Running WhoIs scanner...")
+	slog.Info("Running WhoIs scanner...")
 
 	select {
 	case <-ctx.Done():
-		s.Logger.Warn("Context cancelled during WhoIs search", "target", domain)
+		slog.Warn("Context cancelled during WhoIs search", "target", domain)
 		return tools.ToolResult{}, ctx.Err()
 	default:
 		// Proceed with the operation
 	}
 
-	whoIsRaw, err := whois.Whois(domain)
-	if err != nil {
-		s.Logger.Error("Error fetching WHOIS", "target", domain, "error", err)
-		return tools.ToolResult{}, err
+	var whoIsRaw string
+	var err error
+
+	for attempt := 0; attempt < s.maxRetries; attempt++ {
+		whoIsRaw, err = whois.Whois(domain)
+		if err == nil {
+			break
+		} else {
+			slog.Warn("WhoIs request failed, retrying",
+				slog.Int("attempt", attempt),
+				slog.Any("whois_error", err),
+				slog.Duration("delay", s.retryDelay))
+		}
+		newRetryDelay := s.calculateRetryDelay(attempt)
+		time.Sleep(newRetryDelay)
 	}
 
 	parsedResult, err := whoisparser.Parse(whoIsRaw)
 	if err != nil {
-		s.Logger.Error("Error parsing WHOIS data", "target", domain, "error", err)
+		slog.Error("Error parsing WHOIS data", "target", domain, "error", err)
 		return tools.ToolResult{}, err
 	}
 
@@ -54,4 +84,16 @@ func (s *WhoIsService) RunScan(ctx context.Context, domain string) (tools.ToolRe
 		},
 		Timestamp: time.Now().UTC(),
 	}, nil
+}
+
+func (s *WhoIsService) calculateRetryDelay(attempt int) time.Duration {
+	// Exponential backoff with jitter
+	delay := s.retryDelay * time.Duration(1<<uint(attempt))
+	jitter := time.Duration(int64(float64(delay) * 0.2)) // +/- 20% jitter
+	delay += jitter
+
+	if delay > 15*time.Second {
+		delay = 15 * time.Second
+	}
+	return delay
 }
