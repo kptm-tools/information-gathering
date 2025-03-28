@@ -57,18 +57,19 @@ func (s *WhoIsService) RunScan(ctx context.Context, domain string) (tools.ToolRe
 	var whoIsRaw string
 	var err error
 
-	for attempt := 0; attempt < s.maxRetries; attempt++ {
+	for retryCount := 0; retryCount < s.maxRetries; retryCount++ {
+		if retryCount > 0 { // Log only on retries, not on the initial attempt
+			newRetryDelay := s.calculateRetryDelay(retryCount)
+			slog.Warn("WhoIs request failed, retrying",
+				slog.Int("attempt", retryCount+1),
+				slog.Any("whois_error", err),
+				slog.Duration("delay", newRetryDelay))
+			time.Sleep(newRetryDelay)
+		}
 		whoIsRaw, err = whois.Whois(domain)
 		if err == nil {
 			break
-		} else {
-			slog.Warn("WhoIs request failed, retrying",
-				slog.Int("attempt", attempt+1),
-				slog.Any("whois_error", err),
-				slog.Duration("delay", s.retryDelay))
 		}
-		newRetryDelay := s.calculateRetryDelay(attempt)
-		time.Sleep(newRetryDelay)
 	}
 
 	parsedResult, err := whoisparser.Parse(whoIsRaw)
