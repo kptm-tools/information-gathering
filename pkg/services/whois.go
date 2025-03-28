@@ -71,6 +71,13 @@ func (s *WhoIsService) RunScan(ctx context.Context, domain string) (tools.ToolRe
 			break
 		}
 	}
+	// If err is not nil after the retry loop
+	if err != nil {
+		slog.Error("WhoIs request failed after max retries",
+			slog.Int("max_retries", s.maxRetries),
+			slog.Any("error", err))
+		return tools.ToolResult{}, err
+	}
 
 	parsedResult, err := whoisparser.Parse(whoIsRaw)
 	if err != nil {
