@@ -63,7 +63,7 @@ func (s *WhoIsService) RunScan(ctx context.Context, domain string) (tools.ToolRe
 			break
 		} else {
 			slog.Warn("WhoIs request failed, retrying",
-				slog.Int("attempt", attempt),
+				slog.Int("attempt", attempt+1),
 				slog.Any("whois_error", err),
 				slog.Duration("delay", s.retryDelay))
 		}
