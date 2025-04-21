@@ -13,14 +13,33 @@ import (
 )
 
 type DNSLookupService struct {
-	Logger *slog.Logger
+	maxRetries int
+	retryDelay time.Duration
+}
+
+type DNSLookupOpts struct {
+	MaxRetries int
+	RetryDelay time.Duration
 }
 
 var _ interfaces.IDNSLookupService = (*DNSLookupService)(nil)
 
-func NewDNSLookupService() *DNSLookupService {
+func NewDNSLookupService(opts *DNSLookupOpts) *DNSLookupService {
+	if opts == nil {
+		opts = &DNSLookupOpts{}
+	}
+	maxRetries := opts.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+	retryDelay := opts.RetryDelay
+	if retryDelay <= 0 {
+		retryDelay = 5 * time.Second
+	}
+
 	return &DNSLookupService{
-		Logger: slog.New(slog.Default().Handler()),
+		maxRetries: maxRetries,
+		retryDelay: retryDelay,
 	}
 }
 
@@ -34,15 +53,32 @@ func (s *DNSLookupService) RunScan(ctx context.Context, domain string) (tools.To
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		s.Logger.Warn("Context canceled during DNS lookup", "domain", domain)
+		slog.Warn("Context canceled during DNS lookup", "domain", domain)
 		return tools.ToolResult{}, ctx.Err()
 	default:
 		// Proceed with the operation
 	}
 
-	lookupResult, err := performDNSLookup(ctx, domain)
+	var lookupResult tools.DNSLookupResult
+	var err error
+
+	for retryCount := 0; retryCount < s.maxRetries; retryCount++ {
+		if retryCount > 0 { // Log only retries on initial attempt
+			newRetryDelay := s.calculateRetryDelay(retryCount)
+			slog.Warn("DNSLookup request failed, retrying",
+				slog.Int("attempt", retryCount+1),
+				slog.Any("dns_error", err),
+				slog.Duration("new_delay", newRetryDelay))
+			time.Sleep(newRetryDelay)
+		}
+		lookupResult, err = performDNSLookup(ctx, domain)
+		if err == nil {
+			break
+		}
+	}
+	// If err is not nil after the retry loop
 	if err != nil {
-		s.Logger.Error("Error performing DNSLookup for target ", "target", domain, "error", err)
+		slog.Error("Error performing DNSLookup for target ", "target", domain, "error", err)
 		result.Err = &tools.ToolError{
 			Code:    enums.ToolError,
 			Message: fmt.Errorf("error performing DNSLookup %w", err).Error(),
@@ -55,7 +91,6 @@ func (s *DNSLookupService) RunScan(ctx context.Context, domain string) (tools.To
 }
 
 func performDNSLookup(ctx context.Context, domain string) (tools.DNSLookupResult, error) {
-
 	var (
 		records       []tools.DNSRecord
 		DNSSECEnabled bool
@@ -103,7 +138,6 @@ func performDNSLookup(ctx context.Context, domain string) (tools.DNSLookupResult
 		LookupDuration: duration,
 		CreatedAt:      time.Now(),
 	}, nil
-
 }
 
 // QueryDNSRecord fetches available records of the specified type and returns TTL information
@@ -199,4 +233,16 @@ func QueryDNSRecord(domain string, recordType uint16) ([]tools.DNSRecord, error)
 		}
 	}
 	return records, nil
+}
+
+func (s *DNSLookupService) calculateRetryDelay(attempt int) time.Duration {
+	// Exponential backoff with jitter
+	delay := s.retryDelay * time.Duration(1<<uint(attempt))
+	jitter := time.Duration(int64(float64(delay) * 0.2)) // +/- 20% jitter
+	delay += jitter
+
+	if delay > 15*time.Second {
+		delay = 15 * time.Second
+	}
+	return delay
 }
