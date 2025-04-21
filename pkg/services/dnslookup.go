@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"time"
 
 	"github.com/kptm-tools/common/common/pkg/enums"
@@ -239,7 +240,7 @@ func (s *DNSLookupService) calculateRetryDelay(attempt int) time.Duration {
 	// Exponential backoff with jitter
 	delay := s.retryDelay * time.Duration(1<<uint(attempt))
 	jitter := time.Duration(int64(float64(delay) * 0.2)) // +/- 20% jitter
-	if rand.Intn(2) == 0 { // Randomly decide the sign of the jitter
+	if rand.Intn(2) == 0 {                               // Randomly decide the sign of the jitter
 		jitter = -jitter
 	}
 	delay += jitter
