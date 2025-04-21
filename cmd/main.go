@@ -44,7 +44,10 @@ func main() {
 		MaxRetries: 3,
 		RetryDelay: 5 * time.Second,
 	})
-	dnsLookupService := services.NewDNSLookupService()
+	dnsLookupService := services.NewDNSLookupService(&services.DNSLookupOpts{
+		MaxRetries: 3,
+		RetryDelay: 5 * time.Second,
+	})
 	harvesterService := services.NewHarvesterService()
 
 	// Handlers
