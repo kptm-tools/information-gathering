@@ -41,11 +41,13 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 		default:
 			target, err := utils.ValidateHostForTool(event.Target.Value, enums.ToolDNSLookup)
 			if err != nil {
+				errCode := utils.ClassifyValidationErrorCode(err)
+
 				c <- tools.ToolResult{
 					Tool:   enums.ToolDNSLookup,
 					Result: &tools.DNSLookupResult{},
 					Err: &tools.ToolError{
-						Code:    enums.ValidationError,
+						Code:    errCode,
 						Message: err.Error(),
 					},
 					Timestamp: time.Now().UTC(),
@@ -63,6 +65,7 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("error running DNS handler: %s", err.Error()),
 					},
+					Timestamp: time.Now().UTC(),
 				}
 				return
 			}

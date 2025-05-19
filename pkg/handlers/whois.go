@@ -41,12 +41,14 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 		default:
 			target, err := utils.ValidateHostForTool(event.Target.Value, enums.ToolWhoIs)
 			if err != nil {
+				errCode := utils.ClassifyValidationErrorCode(err)
+
 				c <- tools.ToolResult{
 					Tool:   enums.ToolWhoIs,
 					Result: &tools.WhoIsResult{},
 					Err: &tools.ToolError{
-						Code:    enums.ValidationError,
-						Message: fmt.Sprintf("invalid target: %s", event.Target.Value),
+						Code:    errCode,
+						Message: err.Error(),
 					},
 					Timestamp: time.Now().UTC(),
 				}
@@ -63,6 +65,7 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("failed to run whoIs scan: %s", err.Error()),
 					},
+					Timestamp: time.Now().UTC(),
 				}
 				return
 			}
