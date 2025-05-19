@@ -68,11 +68,13 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 			if err != nil {
 				h.logger.Error("error running Harvester Handler scan", slog.Any("error", err))
 				c <- tools.ToolResult{
-					Tool: enums.ToolHarvester,
+					Tool:   enums.ToolHarvester,
+					Result: &tools.HarvesterResult{},
 					Err: &tools.ToolError{
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("error running Harvester scan: %s", err.Error()),
 					},
+					Timestamp: time.Now().UTC(),
 				}
 				return
 			}

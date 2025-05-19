@@ -73,6 +73,7 @@ func (h *DNSLookupHandler) RunScan(ctx context.Context, event events.ScanStarted
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("error running DNS handler: %s", err.Error()),
 					},
+					Timestamp: time.Now().UTC(),
 				}
 				return
 			}

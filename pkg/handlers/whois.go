@@ -73,6 +73,7 @@ func (h *WhoIsHandler) RunScan(ctx context.Context, event events.ScanStartedEven
 						Code:    enums.ToolError,
 						Message: fmt.Sprintf("failed to run whoIs scan: %s", err.Error()),
 					},
+					Timestamp: time.Now().UTC(),
 				}
 				return
 			}
