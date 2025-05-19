@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/kptm-tools/common/common/pkg/customerrors"
 	"github.com/kptm-tools/common/common/pkg/enums"
 	"github.com/kptm-tools/common/common/pkg/events"
 	"github.com/kptm-tools/common/common/pkg/results/tools"
@@ -29,7 +31,6 @@ func NewHarvesterHandler(harvesterService interfaces.IHarvesterService) *Harvest
 }
 
 func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStartedEvent) <-chan tools.ToolResult {
-
 	c := make(chan tools.ToolResult)
 	// 1. Parse targets from event
 
@@ -43,11 +44,19 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 		default:
 			target, err := utils.ValidateHostForTool(event.Target.Value, enums.ToolHarvester)
 			if err != nil {
-				h.logger.Error("Error validating host for tool", slog.Any("error", err))
+				var errIncompatibleTool *customerrors.ToolIncompatibleError
+				var errCode enums.ErrorCode
+				if errors.As(err, &errIncompatibleTool) {
+					errCode = enums.ToolSkippedError
+				} else {
+					errCode = enums.ValidationError
+				}
+
 				c <- tools.ToolResult{
-					Tool: enums.ToolHarvester,
+					Tool:   enums.ToolHarvester,
+					Result: &tools.HarvesterResult{},
 					Err: &tools.ToolError{
-						Code:    enums.ValidationError,
+						Code:    errCode,
 						Message: err.Error(),
 					},
 					Timestamp: time.Now().UTC(),
@@ -69,7 +78,6 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 			}
 			c <- result
 		}
-
 	}()
 
 	return c
