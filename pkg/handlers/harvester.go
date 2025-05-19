@@ -2,13 +2,11 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
-	"github.com/kptm-tools/common/common/pkg/customerrors"
 	"github.com/kptm-tools/common/common/pkg/enums"
 	"github.com/kptm-tools/common/common/pkg/events"
 	"github.com/kptm-tools/common/common/pkg/results/tools"
@@ -44,13 +42,7 @@ func (h *HarvesterHandler) RunScan(ctx context.Context, event events.ScanStarted
 		default:
 			target, err := utils.ValidateHostForTool(event.Target.Value, enums.ToolHarvester)
 			if err != nil {
-				var errIncompatibleTool *customerrors.ToolIncompatibleError
-				var errCode enums.ErrorCode
-				if errors.As(err, &errIncompatibleTool) {
-					errCode = enums.ToolSkippedError
-				} else {
-					errCode = enums.ValidationError
-				}
+				errCode := utils.ClassifyValidationErrorCode(err)
 
 				c <- tools.ToolResult{
 					Tool:   enums.ToolHarvester,
