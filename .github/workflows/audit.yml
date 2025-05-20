@@ -1,0 +1,43 @@
+name: Go Audit Checks
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+jobs: 
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.8'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with: 
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download Go modules (for application & audit tools)
+        run: go mod download
+
+      - name: Install audit tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      - name: Run audit checks
+        run: make audit
+
+
+
