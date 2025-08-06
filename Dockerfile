@@ -1,5 +1,5 @@
 # Stage 1: Builder - for compiling dependencies
-FROM golang:1.23.8 AS builder
+FROM golang:1.24.4 AS builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY pkg/ ./pkg
 RUN go install github.com/air-verse/air@latest
 
 # Stage 2: Development - for running the application with live reload
-FROM golang:1.23.8 AS development
+FROM golang:1.24.4 AS development
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ EXPOSE 8001
 CMD ["air"]
 
 # Stage 3: Production - for building the production binary
-FROM golang:1.23.8 AS production
+FROM golang:1.24.4 AS production
 
 WORKDIR /app
 
