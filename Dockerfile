@@ -31,8 +31,8 @@ EXPOSE 8001
 # The command to run the application using air for live-reloading
 CMD ["air"]
 
-# Stage 3: Production - for building the production binary
-FROM golang:1.24.4 AS production
+# Stage 3: Production builder - for building the production binary
+FROM golang:1.24.4 AS production-builder
 
 WORKDIR /app
 
@@ -43,8 +43,22 @@ RUN go mod download
 COPY cmd/ ./cmd
 COPY pkg/ ./pkg
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o ./bin/information-gathering ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o ./bin/information-gathering ./cmd/main.go
+
+# Stage 4: Production - minimal final image
+FROM alpine:3.19 AS production
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=production-builder /app/bin/information-gathering /app/information-gathering
+
+# Copy the wordlists from the production-builder stage
+COPY --from=production-builder /app/pkg/services/wordlists /app/pkg/services/wordlists
 
 EXPOSE 8001
 
-CMD ["./bin/information-gathering"]
+USER nobody
+
+CMD ["/app/information-gathering"]
